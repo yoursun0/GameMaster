@@ -1,0 +1,23 @@
+:root {
+  --bg: #171c27;
+  --surface: #202632;
+  --ink: #e8e2d6;
+  --muted: #a8a99f;
+  --accent: #dab675;
+  --line: #3b4050;
+  --selected: #302d2a;
+  --hp: #88b9a7;
+  --mp: #a2a6d1;
+  --paper: #f0e9d8;
+  --paper-ink: #39362f;
+  --paper-muted: #7d7666;
+  --paper-accent: #8c6529;
+  --avatar: #2c303a;
+  --track: #393e49;
+  --success: #2a3c39;
+  --chip: #292f3b;
+  --button-ink: #242125;
+  --font-ui: "Microsoft JhengHei", "PingFang TC", system-ui, sans-serif;
+  --font-story: "Noto Serif TC", "PMingLiU", Georgia, serif;
+  --font-mono: Consolas, "Cascadia Mono", ui-monospace, monospace;
+}
