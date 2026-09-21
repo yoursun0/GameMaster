@@ -3,8 +3,17 @@
 ## Completed
 
 - **M1 — Scaffold and persistence bootstrap** (2026-09-21)
+- **M2 — Rules engine, schemas, and content validator** (2026-09-21)
 
-## Verification
+## M2 verification
+
+| Check | Result |
+| --- | --- |
+| `bun run test` | 46 passed: checks, ability/MP, conditions, resources, help/items/rest, overwhelm, 1–4 player turns, all-pass, two-round setback, remaining-seat close, progress/threat conflict, ending formula, route last-wins/default, repeat-approach unlock, eight-scene solo success and four-player failure |
+| `bun run typecheck` / `bun run lint` | Pass |
+| `bun run content:validate` | Exits 1: no production world packs yet (M5/M6) |
+
+## M1 verification
 
 | Check | Result |
 | --- | --- |
@@ -23,14 +32,14 @@ Pinned toolchain: Node 24.14.0, Bun 1.4.2, Next 16.3.5, React 19.3.0, TypeScript
 
 ## Known gaps
 
-- Setup wizard, rules engine, sessions, DeepSeek adapter, world packs, and production GUI are not started (M2–M8).
-- Empty game/session/action/catalog/transcript routes return `501 NOT_IMPLEMENTED`.
-- `bun run content:validate` and `bun run test:live` exit 1 by design until M6/M8.
-- No Playwright cases yet; `test:e2e` has an empty suite.
-- Landing/play pages are placeholders using option-1 tokens, not the full Chronicle GUI.
-- Live provider verification is not part of M1.
-- `content:validate` is in the documented setup sequence but exits 1 until M6 world packs exist.
+- Browser identity, session HTTP, transcript, and operation fencing are not started (M3).
+- DeepSeek adapter is not started (M4).
+- Production world packs are not authored (M5/M6). Empty registry makes `content:validate` fail until then.
+- Production GUI is not started (M7).
+- Empty game/session/action/catalog/transcript routes still return `501 NOT_IMPLEMENTED`.
+- `bun run test:live` exits 1 until M8.
+- No Playwright cases yet.
 
 ## Next
 
-M2: shared schemas, rules, round handling, scene progression, content validator.
+M3: browser identity, session creation, public projection, transcript, operation persistence and fencing.
