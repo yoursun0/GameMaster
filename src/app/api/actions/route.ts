@@ -1,8 +1,8 @@
-import { notImplemented } from '@/server/http';
+import { handleSubmitAction } from '@/server/http/handlers';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function POST(): Promise<Response> {
-  return notImplemented();
+export async function POST(request: Request): Promise<Response> {
+  return handleSubmitAction(request);
 }

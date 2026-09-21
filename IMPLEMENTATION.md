@@ -4,6 +4,14 @@
 
 - **M1 — Scaffold and persistence bootstrap** (2026-09-21)
 - **M2 — Rules engine, schemas, and content validator** (2026-09-21)
+- **M3 — Browser identity, sessions, projection, and operation fencing** (2026-09-21)
+
+## M3 verification
+
+| Check | Result |
+| --- | --- |
+| `bun run test` | 64 passed, including 14 integration tests: ownership isolation, create idempotency/replacement, duplicate suppression, stale revision, pending busy, question transcript, cancel preview, §8.6 narration-timeout recovery, lease interrupt |
+| `bun run typecheck` / `bun run lint` | Pass |
 
 ## M2 verification
 
@@ -32,14 +40,14 @@ Pinned toolchain: Node 24.14.0, Bun 1.4.2, Next 16.3.5, React 19.3.0, TypeScript
 
 ## Known gaps
 
-- Browser identity, session HTTP, transcript, and operation fencing are not started (M3).
-- DeepSeek adapter is not started (M4).
-- Production world packs are not authored (M5/M6). Empty registry makes `content:validate` fail until then.
+- Real DeepSeek adapter is not started (M4). HTTP session create still returns `AI_NOT_CONFIGURED` without `AI_MODE=fixture`.
+- Production world packs are not authored (M5/M6).
+- Empty registry still makes `content:validate` fail until M5/M6.
 - Production GUI is not started (M7).
-- Empty game/session/action/catalog/transcript routes still return `501 NOT_IMPLEMENTED`.
 - `bun run test:live` exits 1 until M8.
 - No Playwright cases yet.
+- Process-local provider concurrency (2) and session-create IP buckets are not fully exercised.
 
 ## Next
 
-M3: browser identity, session creation, public projection, transcript, operation persistence and fencing.
+M4: DeepSeek adapter, JSON validation, interpretation and narration prompts, test provider.

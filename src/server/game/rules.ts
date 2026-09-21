@@ -140,7 +140,7 @@ function itemQuantity(state: SessionState, itemId: string): number {
     .reduce((sum, item) => sum + item.quantity, 0);
 }
 
-function approachAvailable(
+export function isApproachAvailable(
   state: SessionState,
   approach: ApproachDefinition,
 ): boolean {
@@ -493,7 +493,7 @@ export function resolveAction(
   if (approach.risk === 'trust' && !approach.npcId) {
     return fail('INVALID_INPUT');
   }
-  if (!approachAvailable(state, approach)) {
+  if (!isApproachAvailable(state, approach)) {
     return fail('REPEAT_APPROACH');
   }
 
@@ -589,7 +589,7 @@ export function resolveAction(
   next = markClosingIfNeeded(next);
 
   const availableChecks = currentScene(pack, next).approaches.filter((entry) =>
-    next.scene.closingReason ? false : approachAvailable(next, entry),
+    next.scene.closingReason ? false : isApproachAvailable(next, entry),
   );
   if (!next.scene.closingReason && availableChecks.length === 0) {
     next.scene.closingReason = 'setback';

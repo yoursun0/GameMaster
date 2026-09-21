@@ -131,3 +131,39 @@ export const submitActionSchema = z.discriminatedUnion('kind', [
 ]);
 
 export type SubmitAction = z.infer<typeof submitActionSchema>;
+
+export const createPlayerSchema = z
+  .object({
+    displayName: displayNameSchema,
+    characterId: z.string().min(1).max(80),
+  })
+  .strict();
+
+export const createSessionSchema = z
+  .object({
+    createRequestId: uuidSchema,
+    worldId: z.string().min(1).max(80),
+    locale: localeSchema,
+    players: z.array(createPlayerSchema).min(1).max(4),
+    replaceSessionId: uuidSchema.optional(),
+  })
+  .strict();
+
+export type CreateSessionRequest = z.infer<typeof createSessionSchema>;
+
+export const endSessionSchema = z
+  .object({
+    expectedRevision: revisionSchema,
+    confirm: z.literal(true),
+  })
+  .strict();
+
+export type EndSessionRequest = z.infer<typeof endSessionSchema>;
+
+export const confirmActionSchema = z
+  .object({
+    expectedRevision: revisionSchema,
+  })
+  .strict();
+
+export type ConfirmActionRequest = z.infer<typeof confirmActionSchema>;
