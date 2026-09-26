@@ -29,9 +29,12 @@ export function createScriptedMaster(
       if (options.interpret) {
         return options.interpret;
       }
-      const match = context.availableApproachIds.find((id) =>
-        context.text.includes(id),
-      );
+      const match =
+        context.availableApproachIds.find((id) => context.text.includes(id)) ??
+        context.approaches?.find((approach) =>
+          context.text.toLowerCase().includes(approach.label.toLowerCase()),
+        )?.id ??
+        context.availableApproachIds[0];
       if (match) {
         return {
           kind: 'check',
@@ -54,10 +57,16 @@ export function createScriptedMaster(
 }
 
 export function defaultNarration(context: NarrateContext): Narration {
+  const prompt =
+    context.locale === 'zh-Hant' ? '你要怎麼做？' : 'What do you do next?';
+  const paragraph =
+    context.locale === 'zh-Hant'
+      ? `主持人記下結果：${context.outcome}。`
+      : `The Game Master notes the outcome: ${context.outcome}.`;
   return {
-    paragraphs: [`The Game Master notes: ${context.outcome}.`],
+    paragraphs: [paragraph],
     quote: null,
-    prompt: 'What will you do?',
+    prompt: context.endingKind ? null : prompt,
     suggestions: [],
     journalFact: null,
     ending: null,

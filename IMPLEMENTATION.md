@@ -6,6 +6,15 @@
 - **M2 — Rules engine, schemas, and content validator** (2026-09-21)
 - **M3 — Browser identity, sessions, projection, and operation fencing** (2026-09-21)
 - **M4 — DeepSeek adapter, prompts, context, and fixture provider tests** (2026-09-21)
+- **M5 — Ashen Thrones vertical slice (EN + 繁中) through real routes** (2026-09-21)
+
+## M5 verification
+
+| Check | Result |
+| --- | --- |
+| `bun run test` | 85 passed, including Ashen Thrones validation and EN/ZH setup→preview→check→ending→reload |
+| `bun run content:validate` | Passes (1 world pack) |
+| `bun run typecheck` / `bun run lint` | Pass |
 
 ## M4 verification
 
@@ -49,8 +58,7 @@ Pinned toolchain: Node 24.14.0, Bun 1.4.2, Next 16.3.5, React 19.3.0, TypeScript
 ## Known gaps
 
 - Live DeepSeek smoke tests are not run (need authorization and a configured key). HTTP create still returns `AI_NOT_CONFIGURED` when no server key is set and fixture mode is off.
-- Production world packs are not authored (M5/M6).
-- Empty registry still makes `content:validate` fail until M5/M6.
+- Remaining three worlds are not authored (M6).
 - Production GUI is not started (M7).
 - `bun run test:live` exits 1 until M8.
 - No Playwright cases yet.
@@ -58,4 +66,4 @@ Pinned toolchain: Node 24.14.0, Bun 1.4.2, Next 16.3.5, React 19.3.0, TypeScript
 
 ## Next
 
-M5: one complete vertical slice — Ashen Thrones in both languages through real routes.
+M6: remaining three complete world packs and bilingual character content.

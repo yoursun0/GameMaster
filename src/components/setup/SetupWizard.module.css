@@ -1,0 +1,85 @@
+.page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px 20px 64px;
+  display: grid;
+  gap: 16px;
+}
+
+.eyebrow {
+  margin: 0;
+  letter-spacing: 4px;
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-story);
+  font-weight: 400;
+  letter-spacing: 8px;
+}
+
+.field,
+.seat label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.field select,
+.seat input,
+.seat select,
+.actions button {
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+
+.world {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px;
+  background: var(--surface);
+}
+
+.world h2 {
+  margin: 0 0 8px;
+  color: var(--accent);
+}
+
+.seat {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.bio {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.warn {
+  color: var(--accent);
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.actions button {
+  cursor: pointer;
+  background: var(--accent);
+  color: var(--button-ink);
+  border-color: var(--accent);
+}

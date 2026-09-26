@@ -1,0 +1,147 @@
+.shell {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr) 240px;
+  grid-template-rows: auto 1fr auto;
+  min-height: 100vh;
+}
+
+.top {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.party,
+.side {
+  padding: 16px;
+  border-right: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.side {
+  border-right: 0;
+  border-left: 1px solid var(--line);
+}
+
+.party article,
+.side section {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.active {
+  border-color: var(--accent);
+  background: var(--selected);
+}
+
+.party h2,
+.side h2 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.story {
+  padding: 24px 28px 120px;
+  background: var(--paper);
+  color: var(--paper-ink);
+  font-family: var(--font-story);
+  font-size: 18px;
+  line-height: 1.9;
+}
+
+.place {
+  color: var(--paper-muted);
+  letter-spacing: 2px;
+  font-size: 12px;
+  font-family: var(--font-ui);
+}
+
+.gm p,
+.player,
+.check {
+  margin: 0 0 12px;
+}
+
+.player {
+  color: var(--paper-accent);
+}
+
+.check {
+  font-family: var(--font-mono);
+  font-size: 14px;
+}
+
+.ending {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--paper-muted);
+}
+
+.composer {
+  grid-column: 1 / -1;
+  padding: 16px 20px 24px;
+  border-top: 1px solid var(--line);
+  background: var(--bg);
+  display: grid;
+  gap: 10px;
+}
+
+.composer textarea {
+  width: 100%;
+  min-height: 72px;
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.suggestions,
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.composer button,
+.ending button {
+  font: inherit;
+  cursor: pointer;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--button-ink);
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+
+.preview {
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.warn {
+  color: var(--accent);
+}
+
+.loading {
+  padding: 48px;
+}
+
+@media (max-width: 900px) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+
+  .party,
+  .side {
+    border: 0;
+  }
+}
