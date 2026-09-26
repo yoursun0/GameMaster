@@ -5,6 +5,14 @@
 - **M1 — Scaffold and persistence bootstrap** (2026-09-21)
 - **M2 — Rules engine, schemas, and content validator** (2026-09-21)
 - **M3 — Browser identity, sessions, projection, and operation fencing** (2026-09-21)
+- **M4 — DeepSeek adapter, prompts, context, and fixture provider tests** (2026-09-21)
+
+## M4 verification
+
+| Check | Result |
+| --- | --- |
+| `bun run test` | 81 passed, including DeepSeek adapter cases for valid JSON, narration, fenced/non-JSON, extra keys, malformed types, unknown IDs, empty content, truncated completion, timeout without key leak, 401, 429, 5xx retry, sentinel secrecy until reveal, loopback fixture gate, and no production fixture fallback |
+| `bun run typecheck` / `bun run lint` | Pass |
 
 ## M3 verification
 
@@ -40,7 +48,7 @@ Pinned toolchain: Node 24.14.0, Bun 1.4.2, Next 16.3.5, React 19.3.0, TypeScript
 
 ## Known gaps
 
-- Real DeepSeek adapter is not started (M4). HTTP session create still returns `AI_NOT_CONFIGURED` without `AI_MODE=fixture`.
+- Live DeepSeek smoke tests are not run (need authorization and a configured key). HTTP create still returns `AI_NOT_CONFIGURED` when no server key is set and fixture mode is off.
 - Production world packs are not authored (M5/M6).
 - Empty registry still makes `content:validate` fail until M5/M6.
 - Production GUI is not started (M7).
@@ -50,4 +58,4 @@ Pinned toolchain: Node 24.14.0, Bun 1.4.2, Next 16.3.5, React 19.3.0, TypeScript
 
 ## Next
 
-M4: DeepSeek adapter, JSON validation, interpretation and narration prompts, test provider.
+M5: one complete vertical slice — Ashen Thrones in both languages through real routes.

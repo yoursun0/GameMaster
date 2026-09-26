@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { randomUUID } from 'node:crypto';
+import { buildInterpretContext, buildNarrateContext } from '@/server/ai/context';
 import type { GameMaster, Interpretation, Narration } from '@/server/ai/types';
 import { ProviderError, interpretationSchema, narrationSchema } from '@/server/ai/types';
 import type { WorldPack } from '@/server/content/types';
@@ -514,21 +515,20 @@ export class GameService {
     if (!this.provider) {
       throw new GameServiceError('AI_NOT_CONFIGURED', locale, { operationId });
     }
-    const scene = currentScene(pack, state);
-    const available = scene.approaches
-      .filter((approach) => !state.scene.closingReason && isApproachAvailable(state, approach))
-      .map((approach) => approach.id);
     let interpretation: Interpretation;
     try {
       this.bumpAttempts(op.id);
       interpretation = interpretationSchema.parse(
-        await this.provider.interpret({
-          locale,
-          actorId: command.actorId,
-          text: command.text,
-          useAbility: Boolean(command.useAbility),
-          availableApproachIds: available,
-        }),
+        await this.provider.interpret(
+          buildInterpretContext({
+            pack,
+            state,
+            actorId: command.actorId,
+            text: command.text,
+            useAbility: Boolean(command.useAbility),
+            messages: this.repo.latestMessages(row.id, 8),
+          }),
+        ),
       );
     } catch (error) {
       return this.providerFailure(owner, op.id, error);
@@ -665,12 +665,26 @@ export class GameService {
       try {
         this.bumpAttempts(op.id);
         narration = narrationSchema.parse(
-          await this.provider.narrate({
-            locale,
-            actorId: plan.actorId,
-            text: plan.playerText ?? undefined,
-            outcome: plan.engineCheck?.outcome ?? plan.sceneResult ?? command.kind,
-          }),
+          await this.provider.narrate(
+            buildNarrateContext({
+              pack,
+              before: state,
+              after: plan.nextState,
+              actorId: plan.actorId,
+              text: plan.playerText ?? undefined,
+              outcome: plan.engineCheck?.outcome ?? plan.sceneResult ?? command.kind,
+              check: plan.engineCheck
+                ? {
+                    die: plan.engineCheck.die,
+                    attribute: plan.engineCheck.attribute,
+                    total: plan.engineCheck.total,
+                    target: plan.engineCheck.target,
+                    outcome: plan.engineCheck.outcome,
+                  }
+                : undefined,
+              messages: this.repo.latestMessages(row.id, 8),
+            }),
+          ),
         );
       } catch (error) {
         return this.providerFailure(owner, op.id, error);

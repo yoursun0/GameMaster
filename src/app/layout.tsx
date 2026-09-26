@@ -8,9 +8,18 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
+  const fixtureBanner =
+    process.env.NODE_ENV !== 'production' && process.env.AI_MODE === 'fixture';
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        {fixtureBanner ? (
+          <p role="status" style={{ margin: 0, padding: '8px 16px', background: '#302d2a', color: '#dab675' }}>
+            Fixture Game Master is active. This is not a live model.
+          </p>
+        ) : null}
+        {children}
+      </body>
     </html>
   );
 }

@@ -1,10 +1,10 @@
 import 'server-only';
 
 import { cookies } from 'next/headers';
-import { createScriptedMaster } from '@/server/ai/fixture';
+import { selectGameMaster } from '@/server/ai/provider';
 import { getWorldPacks } from '@/server/content';
 import { getDatabase } from '@/server/db/connection';
-import { getEnv, isAiConfigured } from '@/server/env';
+import { getEnv } from '@/server/env';
 import { GameServiceError } from '@/server/game/errors';
 import { GameService, type OwnerContext } from '@/server/game/service';
 import { jsonNoStore } from '@/server/http';
@@ -27,14 +27,12 @@ const MAX_BODY = 8 * 1024;
 
 export function createConfiguredService(): GameService {
   const env = getEnv();
-  const provider =
-    env.AI_MODE === 'fixture' && env.NODE_ENV !== 'production'
-      ? createScriptedMaster()
-      : null;
   return new GameService({
     db: getDatabase(env.DATABASE_PATH),
     packs: getWorldPacks(),
-    provider: provider ?? (isAiConfigured(env) ? null : null),
+    provider: selectGameMaster(env, {
+      allowFixture: env.NODE_ENV !== 'production',
+    }),
   });
 }
 

@@ -79,12 +79,32 @@ export const narrationSchema = z
 
 export type Narration = z.infer<typeof narrationSchema>;
 
+export type PublicApproachHint = {
+  id: string;
+  label: string;
+  attribute: string;
+};
+
 export type InterpretContext = {
   locale: 'en' | 'zh-Hant';
   actorId: string;
   text: string;
   useAbility: boolean;
   availableApproachIds: string[];
+  worldTone?: string;
+  scene?: { id: string; title: string; description: string };
+  party?: Array<{
+    playerId: string;
+    name: string;
+    hp: number;
+    mp: number;
+    active: boolean;
+  }>;
+  inventory?: Array<{ itemId: string; name: string; quantity: number }>;
+  revealedFacts?: Array<{ id: string; text: string }>;
+  journal?: string[];
+  recentDialogue?: Array<{ kind: string; text: string }>;
+  approaches?: PublicApproachHint[];
 };
 
 export type NarrateContext = {
@@ -92,6 +112,28 @@ export type NarrateContext = {
   actorId: string;
   text?: string;
   outcome: string;
+  nextActorId?: string;
+  availableApproachIds?: string[];
+  partyPlayerIds?: string[];
+  revealedFactIds?: string[];
+  newlyRevealedFacts?: Array<{ id: string; text: string }>;
+  check?: {
+    die: number;
+    attribute: string;
+    total: number;
+    target: number;
+    outcome: string;
+  };
+  resourceChanges?: Array<{ playerId: string; hp: number; mp: number }>;
+  sceneTransition?: { nextId: string; opening: string } | null;
+  endingKind?: string | null;
+  worldTone?: string;
+  scene?: { id: string; title: string; description: string };
+  party?: InterpretContext['party'];
+  inventory?: InterpretContext['inventory'];
+  revealedFacts?: InterpretContext['revealedFacts'];
+  journal?: string[];
+  recentDialogue?: InterpretContext['recentDialogue'];
 };
 
 export interface GameMaster {
