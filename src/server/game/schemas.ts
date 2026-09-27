@@ -138,6 +138,7 @@ export type EngineAction =
       actorId: string;
       approachId: string;
       useAbility?: boolean;
+      toll?: 'none' | 'body' | 'focus' | 'reckless';
     }
   | { kind: 'automatic'; actorId: string }
   | { kind: 'question'; actorId: string }

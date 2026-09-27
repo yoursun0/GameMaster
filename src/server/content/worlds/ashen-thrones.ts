@@ -11,119 +11,236 @@ import { ATTRIBUTES } from '@/shared/schemas';
 
 const L = localized;
 
-const SCENE_COPY: Array<{
+type Move = {
+  label: ReturnType<typeof L>;
+  risk: 'strain' | 'pressure' | 'trust';
+  target: 8 | 12 | 16;
+};
+
+type Beat = {
   title: ReturnType<typeof L>;
   location: ReturnType<typeof L>;
   opening: ReturnType<typeof L>;
   objective: ReturnType<typeof L>;
   prompt: ReturnType<typeof L>;
   npc: string;
-}> = [
+  cleared: ReturnType<typeof L>;
+  setback: ReturnType<typeof L>;
+  moves: Record<Attribute, Move>;
+};
+
+const BEATS: Beat[] = [
   {
-    title: L('A Broken Seal', '破損的封蠟'),
+    title: L('The Door Breaks', '門被踹開'),
     location: L('North road inn', '北境客棧'),
     opening: L(
-      'A wounded traveller presses a letter into your hands. The silver Greywing seal is cracked. He whispers that royal messenger Orren never reached the capital, then loses consciousness.',
-      '負傷的旅人把一封信塞進你們手裡。銀色灰翼封蠟已經裂開。他低聲說，王室信使奧倫始終沒能抵達都城，隨即昏了過去。',
+      'Sellswords boot the inn door off its hinges. Wounded Orren shoves the sealed letter into your hands and drops. Tavi screams to bar the door. They will cut you for that letter. Win this room, then run for the north road while the inn burns.',
+      '傭兵一腳踹開客棧的門。負傷的奧倫把一封封了蠟的信塞進你們手裡，隨即倒下。塔維尖叫著要你們門上落栓。他們為了這封信會砍人。守住這間屋子，然後趁客棧燒起來時往北境大路跑。',
     ),
     objective: L(
-      'Learn who Orren was carrying word for, and where he was bound.',
-      '查明奧倫為誰送信，以及他原本要去哪裡。',
+      'Hold the inn, keep the letter, and get out onto the north road.',
+      '守住客棧、保住信件，然後衝上北境大路。',
     ),
-    prompt: L('The letter is still warm. Who acts first?', '信還帶著體溫。誰先行動？'),
+    prompt: L('The first sellsword is already inside. Who meets him?', '第一個傭兵已經進門。誰上去擋？'),
     npc: 'ash-tavi',
+    cleared: L(
+      'You break into the wet yard. The north road is the only way that is not on fire.',
+      '你們衝進濕院子。沒著火的路只剩北境大路。',
+    ),
+    setback: L(
+      'They take blood and a torn page. You still run: the roof is coming down onto the north road.',
+      '他們拿走了血和撕下的一頁。你們還是跑了：屋頂正往北境大路上塌。',
+    ),
+    moves: {
+      might: { label: L('Hold the door', '頂住店門'), risk: 'strain', target: 8 },
+      agility: { label: L('Drag the courier out the kitchen', '從廚房拖走信差'), risk: 'strain', target: 8 },
+      insight: { label: L('Rip the letter free and read the seal', '搶下信並辨認封蠟'), risk: 'pressure', target: 8 },
+      presence: { label: L('Make Tavi drop the bar with you', '讓塔維一起落下門栓'), risk: 'trust', target: 8 },
+    },
   },
   {
-    title: L('The Border Road', '邊境小徑'),
-    location: L('Guarded forest road', '有人把守的林道'),
+    title: L('The Lance Road', '長槍大路'),
+    location: L('Open causeway', '暴露的官道'),
     opening: L(
-      'The road to the city splits: a watched causeway and a wet forest track. Fresh hoofprints show someone is hunting the same seal you carry.',
-      '通往城市的路分成兩條：受監視的官道，以及潮濕的林徑。新的馬蹄印顯示，有人正在追捕你們手上的封蠟。',
+      'The inn is smoke behind you. Riders lower their lances and come up the causeway. Talk will not stop a charge. Break through them and Crowkeep’s north gate is in sight, under the first evening bell.',
+      '客棧在你們身後只剩煙。騎兵放平長槍，沿官道衝來。說話擋不住衝鋒。衝破他們，鴉堡北門就在第一聲晚鐘之下。',
     ),
-    objective: L('Reach the city without losing the letter.', '在不失去信件的前提下進入城市。'),
-    prompt: L('The pursuit is close. How do you move?', '追兵已近。你們怎麼走？'),
+    objective: L('Survive the charge and reach Crowkeep’s gate.', '活過這次衝鋒，抵達鴉堡城門。'),
+    prompt: L('Hooves are on you. How do you take the hit?', '馬蹄已經到了。你怎麼接這一擊？'),
     npc: 'ash-tavi',
+    cleared: L(
+      'The last rider goes past. Crowkeep’s north gate is ahead, and the evening bell is warming.',
+      '最後一名騎兵衝了過去。鴉堡北門就在前方，晚鐘正在熱身。',
+    ),
+    setback: L(
+      'A lance finds flesh. You still reach the ditch under the gate, bleeding.',
+      '長槍入肉。你們仍然帶著血爬到城門下的溝裡。',
+    ),
+    moves: {
+      might: { label: L('Meet the lance', '迎上長槍'), risk: 'strain', target: 12 },
+      agility: { label: L('Dive for the ditch', '翻進邊溝'), risk: 'strain', target: 12 },
+      insight: { label: L('Find the gap in their line', '找到隊列的缺口'), risk: 'pressure', target: 12 },
+      presence: { label: L('Shout Tavi clear of the hooves', '喝令塔維避開馬蹄'), risk: 'trust', target: 12 },
+    },
   },
   {
-    title: L('Before the Evening Bell', '晚鐘之前'),
+    title: L('The Beating at the Gate', '城門的毆打'),
     location: L('North gate of Crowkeep', '鴉堡北門'),
     opening: L(
-      'Rain needles the gate. A thin youth in a too-large cloak watches your hands. He is Tavi. The first evening bell sounds; the guards begin searching departing packs.',
-      '細雨刺打城門。一個披著過大斗篷的瘦削少年盯著你的手。他是塔維。第一聲晚鐘響起，守衛開始搜查離城者的行囊。',
+      'Guards are beating travellers at the search while the evening bell starts. Tavi points at a drain that floods into the city. Fight the line or take the drain. When the bell finishes, this gate closes, and the only door beyond it is the Greywing archive.',
+      '晚鐘一響，守衛就在搜查處毆打旅人。塔維指向一條灌進城裡的排水溝。跟隊列打，或鑽進溝裡。鐘聲結束時這道門就關，門後唯一的路是灰翼檔案閣樓。',
     ),
-    objective: L(
-      'Gain Tavi’s help before the gates close for the night.',
-      '在城門關閉前取得塔維的協助。',
-    ),
-    prompt: L('Tavi waits for an answer. What do you do?', '塔維正等著回答。你要怎麼做？'),
+    objective: L('Get inside before the bell ends.', '在鐘聲結束前進城。'),
+    prompt: L('A guard raises a cudgel. What do you do?', '一名守衛舉起短棍。你要怎麼做？'),
     npc: 'ash-tavi',
+    cleared: L(
+      'You are through. Tavi runs you toward the archive loft as the bell finishes.',
+      '你們進來了。鐘聲結束時，塔維帶著你們往檔案閣樓跑。',
+    ),
+    setback: L(
+      'You get inside bruised, with a guard’s shout behind you. The archive is still the only door.',
+      '你們帶著傷進城，身後是守衛的喊聲。檔案閣樓仍是唯一的門。',
+    ),
+    moves: {
+      might: { label: L('Brawl the search line', '和搜查隊列打起來'), risk: 'strain', target: 12 },
+      agility: { label: L("Take Tavi's drain", '鑽進塔維的排水溝'), risk: 'pressure', target: 8 },
+      insight: { label: L('See which guard will not die for this', '看穿誰不肯為此送死'), risk: 'pressure', target: 12 },
+      presence: { label: L('Buy one name at the gate', '在城門用一個名字換路'), risk: 'trust', target: 12 },
+    },
   },
   {
-    title: L('Shelter in the Archive', '檔案室的庇護'),
+    title: L('Blood in the Stacks', '書架間的血'),
     location: L('Greywing archive loft', '灰翼檔案閣樓'),
     opening: L(
-      'Tavi leads you into a dust-choked loft of ledgers. The Greywing mark repeats on older charters. A hidden stair is marked only in the margins. You may rest here once.',
-      '塔維帶你們進入佈滿灰塵的帳簿閣樓。灰翼印記反覆出現在舊特許狀上。隱密樓梯只寫在欄外。你們可以在這裡休息一次。',
+      'An assassin is cutting the archivist among the ledgers. One margin names a dragon line that was rewritten. Kill or pin the assassin. After this fight you may rest once. The stair below leads to Captain Maera’s prison watch, where the courier Orren is held.',
+      '刺客正在帳簿間砍檔案官。一處欄外寫著被改寫的龍裔譜系。殺掉刺客，或把他壓住。這一架之後你們可以休息一次。樓下的樓梯通向梅菈隊長的監牢哨站，信差奧倫被關在那裡。',
     ),
-    objective: L('Trace the Greywing seal and find a hidden route onward.', '追查灰翼封蠟，並找出隱藏去路。'),
-    prompt: L('The archive is quiet. How do you use this shelter?', '檔案室很安靜。你們要如何利用這處庇護？'),
+    objective: L('Save the charter, then reach Maera’s watch.', '保住特許狀，然後抵達梅菈的哨站。'),
+    prompt: L("The assassin's knife is already red. Who moves?", '刺客的刀已經紅了。誰先動？'),
     npc: 'ash-tavi',
-  },
-  {
-    title: L("The Officer's Bargain", '隊長的交易'),
-    location: L('Prison-district watch post', '監牢區哨站'),
-    opening: L(
-      'Captain Maera blocks the corridor, rain still on her cloak. She has seen the seal. She will not raise the alarm yet, but she wants to know which house you serve.',
-      '梅菈隊長擋住走廊，斗篷上還掛著雨。她看見了封蠟。她暫時不會示警，但想知道你們究竟為哪一家效力。',
+    cleared: L(
+      'The assassin is down and the margin is yours. Maera’s lamp is lit at the bottom of the stair. Rest once if you must, then go down.',
+      '刺客倒下，欄外的字是你們的了。樓梯底亮著梅菈的燈。要休息就現在，然後下去。',
     ),
-    objective: L('Decide whether to trust Maera and gain prison access.', '決定是否信任梅菈，並取得進入監牢區的途徑。'),
-    prompt: L('Maera’s hand rests on her sword. What do you offer?', '梅菈的手按在劍上。你要提出什麼？'),
-    npc: 'ash-maera',
+    setback: L(
+      'The archivist dies. You keep one page. Maera’s watch is down the stair, and you are not welcome.',
+      '檔案官死了。你們只保住一頁。梅菈的哨站在樓下，而且不歡迎你們。',
+    ),
+    moves: {
+      might: { label: L('Kill the assassin in the aisle', '在通道裡殺掉刺客'), risk: 'strain', target: 12 },
+      agility: { label: L('Pin the assassin in the stacks', '把刺客壓進書架'), risk: 'strain', target: 12 },
+      insight: { label: L('Read the rewritten margin', '讀被改過的欄外'), risk: 'pressure', target: 8 },
+      presence: { label: L('Make Tavi bind the wound', '讓塔維先去綁傷口'), risk: 'trust', target: 12 },
+    },
   },
   {
-    title: L('Beneath the Dragon Chapel', '龍殿之下'),
+    title: L("The Lieutenant's Duel", '副隊長的決鬥'),
+    location: L('Prison-district watch', '監牢區哨站'),
+    opening: L(
+      'Maera’s lieutenant draws steel and demands the letter. Maera watches and will not stop a duel. Win it, and she opens the stair under the dragon chapel, where Orren is held.',
+      '梅菈的副隊長拔劍，要那封信。梅菈在旁看著，不會阻止決鬥。贏了，她就打開龍殿下的樓梯，奧倫被關在下面。',
+    ),
+    objective: L('Win the duel and make Maera open the chapel.', '贏得決鬥，讓梅菈打開龍殿。'),
+    prompt: L('The lieutenant salutes with the point. How do you answer?', '副隊長用劍尖行禮。你怎麼回？'),
+    npc: 'ash-maera',
+    cleared: L(
+      'The lieutenant yields. Maera unlocks the chapel stair.',
+      '副隊長認輸。梅菈打開了龍殿的樓梯。',
+    ),
+    setback: L(
+      'You are cut. Maera opens the stair anyway, because her lieutenant cannot.',
+      '你受了傷。梅菈還是打開樓梯，因為她的副隊長做不到。',
+    ),
+    moves: {
+      might: { label: L('Accept the duel', '接受決鬥'), risk: 'strain', target: 12 },
+      agility: { label: L('Beat the blade aside', '格開劍刃'), risk: 'strain', target: 12 },
+      insight: { label: L('See that he fears Maera, not you', '看穿他怕的是梅菈'), risk: 'pressure', target: 12 },
+      presence: { label: L("Offer Maera the letter's true name", '把信上的真名交給梅菈'), risk: 'trust', target: 8 },
+    },
+  },
+  {
+    title: L('The Chapel Knight', '龍殿騎士'),
     location: L('Chapel undercroft', '龍殿下窖'),
     opening: L(
-      'You find Orren bound but alive. He insists the genealogy you carry is genuine—and also wrong. Someone altered a true dragon line to justify a purge.',
-      '你們找到被縛但仍活著的奧倫。他堅持你們手上的族譜是真的——同時也是錯的。有人竄改了一條真正的龍裔譜系，好為清洗正名。',
+      'A knight in house steel stands over Orren, bound and alive. He will not step aside. Break him and get Orren up the stair. Both houses are already drawing steel in the gallery above.',
+      '一名穿家族鋼甲的騎士站在還活著、被綁住的奧倫面前。他不會讓路。擊倒他，把奧倫帶上樓梯。你們頭上的長廊裡，兩大家族已經在拔劍。',
     ),
-    objective: L('Secure Orren and understand how the evidence was changed.', '救出奧倫，並弄清證據如何被改動。'),
-    prompt: L('Orren looks to the active player. How do you proceed?', '奧倫望向正在行動的人。你們要怎麼做？'),
+    objective: L('Free Orren and carry his truth up to the gallery.', '救出奧倫，把他的真相帶上長廊。'),
+    prompt: L('The knight sets his feet. Who challenges him?', '騎士站穩了。誰向他挑戰？'),
     npc: 'ash-orren',
+    cleared: L(
+      'The knight falls. Orren speaks the altered line. The gallery above is already shouting for blood.',
+      '騎士倒下。奧倫說出被改的那一系。上面的長廊已經在喊著要血。',
+    ),
+    setback: L(
+      'You drag Orren out from under a dying knight. He still tells you the line was forged. The gallery is about to charge.',
+      '你們從瀕死的騎士身下拖出奧倫。他仍然告訴你們譜系是偽造的。長廊即將衝鋒。',
+    ),
+    moves: {
+      might: { label: L('Break the knight', '擊倒騎士'), risk: 'strain', target: 16 },
+      agility: { label: L("Cut Orren free under the guard", '在防守下割開奧倫的繩子'), risk: 'strain', target: 12 },
+      insight: { label: L('Match the forged names', '對上被偽造的名字'), risk: 'pressure', target: 12 },
+      presence: { label: L("Demand the knight's oath", '要求騎士的誓言'), risk: 'trust', target: 12 },
+    },
   },
   {
-    title: L('The House Divided', '分裂的家族'),
+    title: L('The First Charge', '第一衝鋒'),
     location: L('Inner court gallery', '內廷長廊'),
     opening: L(
-      'Two routes remain. Publish the altered genealogy and split the court, or negotiate a quiet release that leaves the houses standing. If you fail here, the safer path is a negotiated peace.',
-      '只剩兩條路。公開被竄改的族譜、撕裂朝堂；或談判一場安靜的釋放，讓家族仍能站著。若在此受挫，較穩妥的路是協商的和平。',
+      'Both houses charge. Raise the letter and join the attack, and the city will call this night a disclosure. Step between the blades and force a halt, and it will call it a negotiation. Either way the fight ends on the bell-tower stair.',
+      '兩大家族同時衝鋒。舉起信加入進攻，這一夜就叫揭發。站進刀鋒之間逼他們停下，這一夜就叫談判。無論哪一條，這一架都會在鐘樓樓梯上結束。',
     ),
-    objective: L('Choose public disclosure or a negotiated release.', '選擇公開揭發，或談判釋放。'),
-    prompt: L('The court is listening. Which way do you commit?', '朝堂正在聽。你們要押上哪一條路？'),
+    objective: L(
+      'Choose the charge or the halt, and live long enough to reach the tower.',
+      '選擇衝鋒或喝停，並活著抵達鐘樓。',
+    ),
+    prompt: L('Steel is one step away. Which way do you commit?', '刀就在一步之外。你押哪一條？'),
     npc: 'ash-maera',
+    cleared: L(
+      'The gallery breaks around your choice. The bell-tower stair is open.',
+      '長廊順著你們的選擇裂開。鐘樓的樓梯開了。',
+    ),
+    setback: L(
+      'The fight carries you instead of the other way around. The stair still takes you up, bloodier.',
+      '是戰鬥拖著你們走，不是你們帶著戰鬥走。樓梯仍把你們送上去，只是更血。',
+    ),
+    moves: {
+      might: { label: L('Raise the letter and charge', '舉起信衝鋒'), risk: 'strain', target: 12 },
+      agility: { label: L('Flank with the charging house', '跟著衝鋒的家族側擊'), risk: 'strain', target: 12 },
+      insight: { label: L('Name the forged line aloud', '當眾說出偽造的譜系'), risk: 'pressure', target: 12 },
+      presence: { label: L('Order both lines to stop', '喝令雙方停步'), risk: 'trust', target: 12 },
+    },
   },
   {
-    title: L('The Last Bell', '最後的鐘聲'),
-    location: L('Bell tower and outer ward', '鐘樓與外郭'),
+    title: L('The Champion on the Stair', '樓梯上的冠軍'),
+    location: L('Bell tower', '鐘樓'),
     opening: L(
-      'The last bell is ringing. Whoever altered the line is moving to seize Orren and the letter. Your chosen path—disclosure or negotiation—must be finished before the ward locks.',
-      '最後的鐘聲正在響。竄改譜系的人正要奪走奧倫與信件。你們選擇的路——揭發或談判——必須在外郭上鎖前走完。',
+      'The usurper’s champion blocks the last stair as the bell starts. This is the last fight. Beat him before it ends, or the war starts under you. The choice you already made in the gallery — disclosure or negotiation — is the name the city will give this night.',
+      '篡位者的冠軍擋住最後一段樓梯，鐘開始響。這是最後一架。在鐘聲結束前打倒他，否則戰爭就在你們腳下開始。你們在長廊已經做的選擇——揭發或談判——就是這座城給今夜的名字。',
     ),
-    objective: L('Finish the chosen plan and decide the kingdom’s immediate future.', '完成選定的計劃，並決定王國眼前的未來。'),
-    prompt: L('The bell does not wait. What do you do?', '鐘聲不等你們。你要怎麼做？'),
-    npc: 'ash-orren',
+    objective: L('Finish the champion before the bell ends.', '在鐘聲結束前解決冠軍。'),
+    prompt: L('The champion fills the stair. What is your last action?', '冠軍擋住樓梯。你最後的行動是什麼？'),
+    npc: 'ash-maera',
+    cleared: L(
+      'The champion drops as the bell rings. The city hears the ending you chose.',
+      '鐘響時冠軍倒下。整座城聽見你們選的那個結局。',
+    ),
+    setback: L(
+      'The champion stands. The bell rings anyway, and the ending is the worse one.',
+      '冠軍還站著。鐘還是響了，結局是較壞的那一個。',
+    ),
+    moves: {
+      might: { label: L('Duel the champion', '和冠軍決鬥'), risk: 'strain', target: 16 },
+      agility: { label: L('Reach the bell rope', '搶到鐘繩'), risk: 'strain', target: 12 },
+      insight: { label: L("Use Orren's forged names", '用奧倫的偽造之名'), risk: 'pressure', target: 12 },
+      presence: { label: L('Make Maera stop both houses', '讓梅菈制止兩家'), risk: 'trust', target: 12 },
+    },
   },
 ];
 
-const APPROACH_LABEL: Record<Attribute, ReturnType<typeof L>> = {
-  might: L('Force a way through', '以力開路'),
-  agility: L('Slip past notice', '避人耳目'),
-  insight: L('Read the marks', '辨讀印記'),
-  presence: L('Speak for trust', '以言取信'),
-};
-
 function approachFor(index: number, attribute: Attribute): ApproachDefinition {
-  const copy = SCENE_COPY[index]!;
+  const beat = BEATS[index]!;
+  const move = beat.moves[attribute];
   const routeId =
     index === 6
       ? attribute === 'might' || attribute === 'agility'
@@ -134,14 +251,12 @@ function approachFor(index: number, attribute: Attribute): ApproachDefinition {
     id: `ash-s${index}-${attribute}`,
     obstacleId: `ash-s${index}-${attribute}`,
     methodVariantId: 'default',
-    label: APPROACH_LABEL[attribute],
-    intentExamples: [
-      L(`Use ${attribute} here.`, `在此運用${attribute}。`),
-    ],
+    label: move.label,
+    intentExamples: [move.label],
     attribute,
-    target: index === 7 && attribute === 'might' ? 16 : index % 2 === 0 ? 8 : 12,
-    risk: attribute === 'presence' ? 'trust' : attribute === 'might' ? 'strain' : 'pressure',
-    npcId: attribute === 'presence' ? copy.npc : undefined,
+    target: move.target,
+    risk: move.risk,
+    npcId: attribute === 'presence' ? beat.npc : undefined,
     choiceId: routeId,
     requires: {},
     retryUnlockedBy:
@@ -160,34 +275,28 @@ function approachFor(index: number, attribute: Attribute): ApproachDefinition {
 }
 
 function scene(index: number): SceneDefinition {
-  const copy = SCENE_COPY[index]!;
+  const beat = BEATS[index]!;
   const act = index <= 1 ? 1 : index <= 5 ? 2 : 3;
-  const suggestions = ATTRIBUTES.slice(0, 3).map((attribute) => ({
-    text: APPROACH_LABEL[attribute],
+  const suggestions = (['might', 'agility', 'insight'] as const).map((attribute) => ({
+    text: beat.moves[attribute].label,
     approachId: `ash-s${index}-${attribute}`,
   }));
   return {
     id: `ash-scene-${index}`,
     index,
     act,
-    title: copy.title,
-    location: copy.location,
-    opening: copy.opening,
-    objective: copy.objective,
-    prompt: copy.prompt,
+    title: beat.title,
+    location: beat.location,
+    opening: beat.opening,
+    objective: beat.objective,
+    prompt: beat.prompt,
     suggestions,
     challengeId: `ash-challenge-${index}`,
     approaches: ATTRIBUTES.map((attribute) => approachFor(index, attribute)),
     availableNpcIds: ['ash-orren', 'ash-tavi', 'ash-maera'],
     publicFactsOnEntry: index === 0 ? ['ash-messenger-missing'] : [],
-    clearedTransition: L(
-      `You press on from ${copy.title.en}.`,
-      `你們從「${copy.title['zh-Hant']}」繼續前進。`,
-    ),
-    setbackTransition: L(
-      `You are driven on, bruised but not finished.`,
-      `你們受挫仍被推向前，還沒結束。`,
-    ),
+    clearedTransition: beat.cleared,
+    setbackTransition: beat.setback,
     factsRequiredForNextScene:
       index === 5
         ? [`ash-clue-${index}`, 'ash-truth-altered-genealogy']
@@ -206,21 +315,21 @@ function openingFor(profile: Profile) {
   const name = names[profile];
   return {
     prompt: L(
-      `${name.en} sees the cracked Greywing seal.`,
-      `${name['zh-Hant']} 看見裂開的灰翼封蠟。`,
+      `${name.en} has the letter. The sellsword is already through the door.`,
+      `${name['zh-Hant']} 拿著信。傭兵已經進門。`,
     ),
     suggestions: [
       {
-        text: L('Ask who sent the traveller', '詢問旅人是誰派來的'),
-        approachId: 'ash-s0-presence',
+        text: L('Hold the door', '頂住店門'),
+        approachId: 'ash-s0-might',
       },
       {
-        text: L('Study the broken seal', '檢視破損的封蠟'),
-        approachId: 'ash-s0-insight',
-      },
-      {
-        text: L('Watch the road behind you', '留意身後的路'),
+        text: L('Drag the courier out the kitchen', '從廚房拖走信差'),
         approachId: 'ash-s0-agility',
+      },
+      {
+        text: L('Rip the letter free and read the seal', '搶下信並辨認封蠟'),
+        approachId: 'ash-s0-insight',
       },
     ],
   };
@@ -231,12 +340,12 @@ export const ashenThrones: WorldPack = {
   contentVersion: 1,
   title: L('Ashen Thrones', '權鬥王座'),
   premise: L(
-    'Find the royal messenger and decide how to handle evidence that could start a succession war.',
-    '找到王室信使，並決定如何處理可能引爆繼承戰爭的證據。',
+    'The king of Crowkeep has been dead three nights. At the last bell two houses start the succession war, unless you carry the true heir’s letter through a city that is already drawing steel.',
+    '鴉堡的王死了三夜。最後一聲鐘響時，兩大家族就會開戰，除非你們把真繼承人的信帶過這座已經拔刀的城。',
   ),
   tone: L(
-    'Wet-stone courts, rain, and careful speech. Violence is possible but never required.',
-    '濕冷石庭、細雨與謹慎的言辭。暴力可行，但絕非必要。',
+    'Rain, steel, and short fights. Every scene ends by leaving for a named place. Wounds stay on the body. The war does not wait for a conversation.',
+    '雨、鋼、短促的戰鬥。每一場都結束在前往下一個指名之地的路上。傷留在身上。戰爭不會等一場對話。',
   ),
   resourceLabels: { hp: L('Vitality', '生命'), mp: L('Mana', '魔力') },
   restorativeItemId: 'ash-restorative',
@@ -375,8 +484,8 @@ export const ashenThrones: WorldPack = {
     {
       id: 'ash-messenger-missing',
       text: L(
-        'Royal messenger Orren never reached the capital.',
-        '王室信使奧倫始終沒有抵達都城。',
+        'The dead king’s letter names a living heir, and sellswords are already killing for it.',
+        '已死國王的信寫著一位還活著的繼承人，傭兵已經在為它殺人。',
       ),
       secret: false,
       revealGate: null,
@@ -390,15 +499,33 @@ export const ashenThrones: WorldPack = {
       secret: true,
       revealGate: { sceneId: 'ash-scene-5', on: 'either' },
     },
-    ...Array.from({ length: 8 }, (_, index) => ({
+    ...[
+      L('The letter is still in your hands after the inn fight. The north road is next.', '客棧一架之後信還在你們手上。下一站是北境大路。'),
+      L('The lance charge is broken. Crowkeep’s gate is the next door.', '長槍衝鋒被撕開。下一扇門是鴉堡城門。'),
+      L('You are inside the walls. The archive loft is the next fight.', '你們進了城牆。下一架在檔案閣樓。'),
+      L('The rewritten margin is yours. Maera’s watch is down the stair.', '被改寫的欄外是你們的了。梅菈的哨站在樓下。'),
+      L('The duel is over. The chapel stair is open, and Orren is below.', '決鬥結束。龍殿樓梯開了，奧倫在下面。'),
+      L('Orren is with you. Both houses are drawing steel in the gallery above.', '奧倫跟著你們。兩大家族正在上面的長廊拔劍。'),
+      L('The gallery has chosen disclosure or negotiation. The bell tower is the last fight.', '長廊已經選了揭發或談判。鐘樓是最後一架。'),
+      L('The bell has rung on the champion. The night has a name.', '鐘在冠軍身上響完。這一夜有了名字。'),
+    ].map((text, index) => ({
       id: `ash-clue-${index}`,
-      text: L(`A usable clue from scene ${index}.`, `場景 ${index} 得到的可用線索。`),
+      text,
       secret: false,
       revealGate: { sceneId: `ash-scene-${index}`, on: 'either' as const },
     })),
-    ...Array.from({ length: 8 }, (_, index) => ({
+    ...[
+      L('Tavi will drop the bar if someone stands with him.', '只要有人跟他一起站，塔維就會落下門栓。'),
+      L('Tavi lives if someone pulls him out of the hooves.', '有人把他拉出馬蹄，塔維就活得過。'),
+      L('One name spoken at the gate is enough to move a frightened guard.', '在城門說出一個名字，就夠讓害怕的守衛讓路。'),
+      L('Tavi can keep a person breathing while the assassin is handled.', '處理刺客時，塔維能讓一個人繼續呼吸。'),
+      L('Maera opens doors for the person who tells her the letter’s true name.', '把信上的真名告訴梅菈的人，她會為之開門。'),
+      L('Orren will speak the forged line once the knight is no longer the loudest thing in the room.', '只要騎士不再是屋子裡最響的東西，奧倫就會說出偽造的那一系。'),
+      L('Maera can hold one line if someone orders both houses to stop.', '只要有人喝令兩家停下，梅菈就能壓住其中一邊。'),
+      L('Maera on the stair can still stop a house that has not yet killed its champion.', '樓梯上的梅菈仍能制止一個還沒殺死冠軍的家族。'),
+    ].map((text, index) => ({
       id: `ash-unlock-${index}`,
-      text: L(`A new angle on scene ${index}.`, `場景 ${index} 的新角度。`),
+      text,
       secret: false,
       revealGate: { sceneId: `ash-scene-${index}`, on: 'either' as const },
     })),
@@ -412,26 +539,26 @@ export const ashenThrones: WorldPack = {
       summary: L(
         routeId === 'ash-disclose'
           ? kind === 'success'
-            ? 'The altered genealogy is read in court. The purge stalls; the houses split in public.'
+            ? 'The champion falls and the forged line is read over his body. The charge that would have started the purge breaks in the bell yard.'
             : kind === 'compromise'
-              ? 'Enough of the truth is spoken to halt the worst of the purge, but the court remains armed.'
-              : 'The disclosure is twisted. The purge begins under a different name.'
+              ? 'The champion yields, but one house still has steel in hand. The purge does not start tonight. It has a name for tomorrow.'
+              : 'The champion cuts you down as the letter is shouted wrong. The bell starts the war.'
           : kind === 'success'
-            ? 'Orren is released under a fragile negotiated peace. The houses remain standing, barely.'
+            ? 'You and Maera hold the stair until both houses lower their points. Orren lives, and the last bell rings over a halt instead of a charge.'
             : kind === 'compromise'
-              ? 'A quiet bargain saves lives and buries part of the evidence. Peace holds for now.'
-              : 'The negotiation collapses. Orren survives, but the succession war is already moving.',
+              ? 'One house steps back. The other does not. The bell buys a night, not a peace, and Orren leaves under guard.'
+              : 'The halt fails. The champion throws you off the line, and the two houses meet on the stair as the bell ends.',
         routeId === 'ash-disclose'
           ? kind === 'success'
-            ? '被竄改的族譜在朝堂上被宣讀。清洗停住；家族在公開場合分裂。'
+            ? '冠軍倒下，偽造的譜系在他身上被宣讀。原本要開始清洗的衝鋒在鐘樓下碎掉。'
             : kind === 'compromise'
-              ? '真相說得夠多，擋住最壞的清洗，但朝堂依然刀出鞘。'
-              : '揭發被扭曲。清洗換了名字開始。'
+              ? '冠軍讓步，但仍有一家刀未入鞘。清洗今夜沒有開始。它有了明天的名字。'
+              : '信被喊錯的同時，冠軍把你們砍倒。鐘聲開戰。'
           : kind === 'success'
-            ? '奧倫在脆弱的協商和平下被釋放。家族勉強還站著。'
+            ? '你們和梅菈守住樓梯，直到兩家放下劍尖。奧倫活著，最後的鐘響在停步之上，不在衝鋒之上。'
             : kind === 'compromise'
-              ? '一場安靜的交易救了人，也埋掉部分證據。和平暫時還在。'
-              : '談判破裂。奧倫活著，繼承戰爭卻已在移動。',
+              ? '一家退了。另一家沒有。鐘聲買到一夜，不是和平。奧倫在看守下離開。'
+              : '喝停失敗。冠軍把你們甩出隊列，鐘聲結束時兩家在樓梯上相遇。',
       ),
       epilogues: [
         {

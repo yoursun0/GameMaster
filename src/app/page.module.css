@@ -19,7 +19,7 @@
   font-family: var(--font-story);
   font-size: 42px;
   font-weight: 400;
-  letter-spacing: 8px;
+  letter-spacing: 0.14em;
 }
 
 .copy {

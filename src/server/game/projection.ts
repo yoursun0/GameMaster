@@ -35,6 +35,8 @@ export type ActionPreviewDTO = {
   conditionModifier: number;
   abilityModifier: number;
   mpCost: number;
+  tollHp: number;
+  tollMp: number;
   stakes: { success: string; partial: string; failure: string };
 };
 

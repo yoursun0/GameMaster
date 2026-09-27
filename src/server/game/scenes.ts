@@ -31,6 +31,28 @@ export function allOverwhelmed(state: SessionState): boolean {
   return state.party.every((member) => member.hp === 0);
 }
 
+export function anyDown(state: SessionState): boolean {
+  return state.party.some((member) => member.hp <= 0);
+}
+
+export function defeatParty(state: SessionState): SessionState {
+  if (!anyDown(state)) return state;
+  const next = structuredClone(state);
+  const names = next.party.filter((member) => member.hp <= 0).map((member) => member.displayName);
+  const zh = next.locale === 'zh-Hant';
+  next.status = 'completed';
+  next.currentPrompt = '';
+  next.suggestions = [];
+  next.ending = {
+    kind: 'failure',
+    summary: zh
+      ? `${names.join('、')}倒下了。你們輸了。`
+      : `${names.join(', ')} has fallen. You are lost.`,
+    epilogues: [],
+  };
+  return next;
+}
+
 export function requirementSatisfied(
   state: SessionState,
   requirement: Requirement,

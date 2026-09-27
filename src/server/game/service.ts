@@ -1,9 +1,9 @@
 import 'server-only';
 
 import { randomUUID } from 'node:crypto';
-import { buildInterpretContext, buildNarrateContext } from '@/server/ai/context';
+import { buildNarrateContext } from '@/server/ai/context';
 import type { GameMaster, Interpretation, Narration } from '@/server/ai/types';
-import { ProviderError, interpretationSchema, narrationSchema } from '@/server/ai/types';
+import { ProviderError, narrationSchema } from '@/server/ai/types';
 import type { WorldPack } from '@/server/content/types';
 import type { SqliteDatabase } from '@/server/db/connection';
 import {
@@ -11,6 +11,7 @@ import {
   type OperationRow,
   type SessionRow,
 } from '@/server/db/repository';
+import { chooseAction } from '@/server/game/choose';
 import { GameServiceError, type ErrorCode } from '@/server/game/errors';
 import { requestHash } from '@/server/game/hash';
 import {
@@ -29,6 +30,9 @@ import {
   rollD20,
   stakesFor,
 } from '@/server/game/rules';
+import { openingParagraphs } from '@/server/content/opening';
+import { storyHarm } from '@/server/game/harm';
+import { anyDown, defeatParty } from '@/server/game/scenes';
 import { currentScene } from '@/server/game/scenes';
 import type { EngineAction, SessionState } from '@/server/game/schemas';
 import { PROFILE_STATS, attributeValue, profileOf } from '@/server/game/profiles';
@@ -61,6 +65,9 @@ type ResolvedPlan = {
   consumedTurn: boolean;
   sceneResult: 'cleared' | 'setback' | null;
   needsNarrator: boolean;
+  resolutionKind: string | null;
+  resolutionNote: string | null;
+  toll: 'none' | 'body' | 'focus' | 'reckless' | null;
   localParagraphs: string[];
   messageIds: { player?: string; check?: string; gm: string; ending?: string };
 };
@@ -148,7 +155,27 @@ export class GameService {
     if (!row) {
       return { session: null };
     }
-    return { session: this.project(row) };
+    return { session: this.project(this.sealDefeat(row)) };
+  }
+
+  private sealDefeat(row: SessionRow): SessionRow {
+    if (row.status !== 'active') return row;
+    const state = this.repo.parseState(row);
+    if (!anyDown(state)) return row;
+    const next = defeatParty(state);
+    const updatedAt = this.nowIso();
+    const wrote = this.repo.casUpdateSession({
+      id: row.id,
+      expectedRevision: row.revision,
+      expectedPending: row.pending_operation_id,
+      revision: row.revision + 1,
+      status: next.status,
+      state_json: JSON.stringify(next),
+      pending_operation_id: null,
+      updated_at: updatedAt,
+    });
+    if (!wrote) return row;
+    return this.repo.getSessionById(row.id) ?? row;
   }
 
   createSession(
@@ -220,7 +247,7 @@ export class GameService {
         scene_id: scene.id,
         kind: 'gm',
         payload_json: JSON.stringify({
-          paragraphs: [scene.opening[body.locale]],
+          paragraphs: openingParagraphs(pack, players, body.locale, scene.opening[body.locale]),
           quote: null,
         }),
         created_at: timestamp,
@@ -261,7 +288,11 @@ export class GameService {
     if (row.status !== 'active') {
       throw new GameServiceError('SESSION_ENDED', locale, { currentRevision: row.revision });
     }
-    const state = this.repo.parseState(row);
+    const sealed = this.sealDefeat(row);
+    if (sealed.status !== 'active') {
+      throw new GameServiceError('SESSION_ENDED', locale, { currentRevision: sealed.revision });
+    }
+    const state = this.repo.parseState(sealed);
     if (command.expectedRevision !== row.revision) {
       throw new GameServiceError('STALE_REVISION', locale, { currentRevision: row.revision });
     }
@@ -515,27 +546,30 @@ export class GameService {
     if (!this.provider) {
       throw new GameServiceError('AI_NOT_CONFIGURED', locale, { operationId });
     }
-    let interpretation: Interpretation;
-    try {
-      this.bumpAttempts(op.id);
-      interpretation = interpretationSchema.parse(
-        await this.provider.interpret(
-          buildInterpretContext({
-            pack,
-            state,
-            actorId: command.actorId,
-            text: command.text,
-            useAbility: Boolean(command.useAbility),
-            messages: this.repo.latestMessages(row.id, 8),
-          }),
-        ),
-      );
-    } catch (error) {
-      return this.providerFailure(owner, op.id, error);
-    }
+    const scene = currentScene(pack, state);
+    const available = scene.approaches.filter(
+      (approach) => !state.scene.closingReason && isApproachAvailable(state, approach),
+    );
+    const interpretation = chooseAction({
+      text: command.text,
+      closing: Boolean(state.scene.closingReason),
+      suggestions: state.suggestions,
+      approaches: scene.approaches.map((approach) => ({
+        id: approach.id,
+        label: approach.label[state.locale],
+        attribute: approach.attribute,
+      })),
+      availableIds: available.map((approach) => approach.id),
+    });
     if (interpretation.kind === 'check') {
       try {
-        const preview = this.buildPreview(state, pack, command, interpretation.approachId);
+        const preview = this.buildPreview(
+          state,
+          pack,
+          command,
+          interpretation.approachId,
+          interpretation.toll ?? 'none',
+        );
         const token = op.lease_token;
         const saved = this.repo.casUpdateOperation({
           id: op.id,
@@ -604,7 +638,10 @@ export class GameService {
         currentRevision: row.revision,
       });
     }
-    const plan = this.makePlan(command, result, false);
+    const plan = this.makePlan(command, result, false, {
+      kind: interpretation.kind,
+      note: resolutionNote(interpretation),
+    });
     this.savePlan(op, plan, 'narrating');
     return this.finishFromResolution(owner, operationId);
   }
@@ -632,6 +669,10 @@ export class GameService {
             actorId: command.actorId,
             approachId: proposal.approachId,
             useAbility: proposal.useAbility,
+            toll:
+              proposal.interpretation.kind === 'check'
+                ? (proposal.interpretation.toll ?? 'none')
+                : 'none',
           }
         : this.toEngineAction(command);
       const result = this.repo.transaction(() => {
@@ -650,6 +691,9 @@ export class GameService {
           command,
           resolved,
           Boolean(proposal) || command.kind === 'act',
+          engineAction.kind === 'check'
+            ? { kind: 'check', toll: engineAction.toll ?? 'none' }
+            : undefined,
         );
         this.savePlan(fresh, created, 'narrating');
         return created;
@@ -672,7 +716,13 @@ export class GameService {
               after: plan.nextState,
               actorId: plan.actorId,
               text: plan.playerText ?? undefined,
-              outcome: plan.engineCheck?.outcome ?? plan.sceneResult ?? command.kind,
+              outcome:
+                plan.engineCheck?.outcome ??
+                plan.sceneResult ??
+                plan.resolutionKind ??
+                (command.kind === 'ask' ? 'question' : command.kind),
+              resolutionNote: plan.resolutionNote ?? undefined,
+              toll: plan.toll ?? undefined,
               check: plan.engineCheck
                 ? {
                     die: plan.engineCheck.die,
@@ -723,7 +773,7 @@ export class GameService {
       if (current.lease_until && current.lease_until < timestamp) {
         return null;
       }
-      const nextState = structuredClone(plan.nextState);
+      let nextState = structuredClone(plan.nextState);
       const paragraphs =
         narration?.paragraphs ?? plan.localParagraphs;
       if (narration) {
@@ -752,7 +802,20 @@ export class GameService {
             });
           }
         }
-        if (nextState.ending && narration.ending) {
+        for (const harm of storyHarm({
+          paragraphs: narration.paragraphs,
+          party: nextState.party,
+          proposed: narration.harms,
+        })) {
+          const member = nextState.party.find((entry) => entry.playerId === harm.playerId);
+          if (!member) continue;
+          member.hp = Math.max(0, member.hp - harm.hp);
+          member.mp = Math.max(0, member.mp - harm.mp);
+        }
+        if (anyDown(nextState)) {
+          nextState = defeatParty(nextState);
+        }
+        if (nextState.ending && narration.ending && !anyDown(nextState)) {
           const playerIds = new Set(nextState.party.map((member) => member.playerId));
           if (
             narration.ending.epilogues.length !== nextState.party.length ||
@@ -804,6 +867,13 @@ export class GameService {
         payload_json: JSON.stringify({
           paragraphs,
           quote: narration?.quote ?? null,
+          harms: narration
+            ? storyHarm({
+                paragraphs: narration.paragraphs,
+                party: nextState.party,
+                proposed: narration.harms,
+              })
+            : [],
         }),
         created_at: timestamp,
       });
@@ -853,6 +923,11 @@ export class GameService {
     command: SubmitAction,
     result: Extract<ReturnType<typeof resolveAction>, { ok: true }>,
     fromCheck: boolean,
+    resolution?: {
+      kind: string;
+      note?: string;
+      toll?: 'none' | 'body' | 'focus' | 'reckless';
+    },
   ): ResolvedPlan {
     const locale = result.state.locale;
     const actor = result.state.party.find((member) => member.playerId === command.actorId);
@@ -868,7 +943,15 @@ export class GameService {
             : command.kind === 'rest'
               ? 'narrate.rest'
               : 'narrate.automatic';
-    const needsNarrator = Boolean(result.sceneResult) || command.kind === 'ask' || fromCheck;
+    const resolutionKind =
+      resolution?.kind ?? (command.kind === 'ask' ? 'question' : null);
+    const narratesWithoutCheck =
+      resolutionKind === 'automatic' ||
+      resolutionKind === 'question' ||
+      resolutionKind === 'clarify' ||
+      resolutionKind === 'impossible';
+    const needsNarrator =
+      Boolean(result.sceneResult) || fromCheck || narratesWithoutCheck;
     return {
       actorId: command.actorId,
       playerText: text ?? (command.kind === 'pass' ? 'pass' : null),
@@ -877,6 +960,9 @@ export class GameService {
       consumedTurn: result.consumedTurn,
       sceneResult: result.sceneResult,
       needsNarrator,
+      resolutionKind,
+      resolutionNote: resolution?.note ?? null,
+      toll: resolution?.toll ?? null,
       localParagraphs: [
         uiString(locale, localKey, {
           name,
@@ -913,6 +999,7 @@ export class GameService {
     pack: WorldPack,
     command: Extract<SubmitAction, { kind: 'act' }>,
     approachId: string,
+    toll: 'none' | 'body' | 'focus' | 'reckless' = 'none',
   ): ActionPreviewDTO {
     const scene = currentScene(pack, state);
     const approach = scene.approaches.find((entry) => entry.id === approachId);
@@ -946,6 +1033,7 @@ export class GameService {
       conditionModifier: conditionModifierFor(actor, approach.attribute),
       abilityModifier: useAbility ? ABILITY_MODIFIER : 0,
       mpCost: useAbility ? ABILITY_COST : 0,
+      ...previewToll(toll, actor.mp),
       stakes: stakesFor(approach.risk, state.locale),
     };
   }
@@ -960,6 +1048,7 @@ export class GameService {
         actorId: command.actorId,
         approachId: interpretation.approachId,
         useAbility: Boolean(command.useAbility),
+        toll: interpretation.toll ?? 'none',
       };
     }
     if (interpretation?.kind === 'automatic') {
@@ -1201,4 +1290,33 @@ export class GameService {
       operation: this.pendingDto(latest),
     };
   }
+}
+
+function previewToll(
+  toll: 'none' | 'body' | 'focus' | 'reckless',
+  mp: number,
+): { tollHp: number; tollMp: number } {
+  if (toll === 'body') {
+    return { tollHp: 1, tollMp: 0 };
+  }
+  if (toll === 'focus') {
+    return mp > 0 ? { tollHp: 0, tollMp: 1 } : { tollHp: 1, tollMp: 0 };
+  }
+  if (toll === 'reckless') {
+    return mp > 0 ? { tollHp: 2, tollMp: 1 } : { tollHp: 3, tollMp: 0 };
+  }
+  return { tollHp: 0, tollMp: 0 };
+}
+
+function resolutionNote(interpretation: Interpretation): string | undefined {
+  if (interpretation.kind === 'question' || interpretation.kind === 'clarify') {
+    return interpretation.question;
+  }
+  if (interpretation.kind === 'impossible') {
+    return interpretation.reason;
+  }
+  if (interpretation.kind === 'automatic') {
+    return interpretation.intentSummary;
+  }
+  return undefined;
 }

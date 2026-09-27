@@ -7,6 +7,7 @@ import {
   applyEffects,
   clamp,
   riskEffects,
+  tollEffects,
   validateEffects,
   type Effect,
 } from './effects';
@@ -22,8 +23,9 @@ import {
   profileOf,
 } from './profiles';
 import {
-  allOverwhelmed,
+  anyDown,
   approachKey,
+  defeatParty,
   currentScene,
   markClosingIfNeeded,
   requirementSatisfied,
@@ -176,7 +178,7 @@ function setPromptFromScene(
   next.currentPrompt = scene.prompt[next.locale];
   next.suggestions = scene.suggestions.map((suggestion) => ({
     text: suggestion.text[next.locale],
-    approachId: suggestion.approachId,
+    approachId: next.scene.closingReason ? null : suggestion.approachId,
   }));
   return next;
 }
@@ -199,8 +201,8 @@ function afterMeaningfulAction(
   }
 
   const thresholds = sceneThresholds(next.party.length);
-  if (allOverwhelmed(next)) {
-    return resolveSceneResult(next, pack, 'setback');
+  if (anyDown(next)) {
+    return defeatParty(next);
   }
   if (next.scene.closingReason) {
     return resolveSceneResult(next, pack, next.scene.closingReason);
@@ -335,6 +337,15 @@ export function resolveAction(
   action: EngineAction,
   rollD20Fn: () => number = rollD20,
 ): EngineResult {
+  if (anyDown(state)) {
+    return {
+      ok: true,
+      state: defeatParty(state),
+      check: null,
+      consumedTurn: false,
+      sceneResult: null,
+    };
+  }
   const actorOrError = assertActiveActor(state, action.actorId);
   if (!('playerId' in actorOrError)) {
     return actorOrError;
@@ -541,6 +552,7 @@ export function resolveAction(
   effects.push(
     ...riskEffects(approach.risk, check.outcome, actor.playerId, approach.npcId),
   );
+  effects.push(...tollEffects(action.toll, actor.playerId, actor.mp));
   const story =
     check.outcome === 'success'
       ? approach.successEffects
@@ -595,9 +607,9 @@ export function resolveAction(
     next.scene.closingReason = 'setback';
   }
 
-  if (allOverwhelmed(next)) {
+  if (anyDown(next)) {
     next.committedActionCount += 1;
-    next = resolveSceneResult(next, pack, 'setback');
+    next = defeatParty(next);
     return {
       ok: true,
       state: next,

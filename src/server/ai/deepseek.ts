@@ -144,7 +144,7 @@ export function createDeepSeekMaster(config: DeepSeekConfig): GameMaster {
         system: NARRATOR_SYSTEM,
         user: narrateUserPayload(context),
         temperature: 0.7,
-        maxTokens: ending ? 2400 : 1800,
+        maxTokens: ending ? 4000 : 3600,
         parse: (raw) => assertNarration(narrationSchema.parse(parseJsonObject(raw)), context),
       });
       return content as Narration;

@@ -4,6 +4,13 @@ import { actorId, check, ok, pass, patchState, start } from './helpers';
 import { testCampaign } from '../fixtures/test-campaign';
 
 describe('resources, recovery and items', () => {
+  test('winning a fight still costs 1 HP', () => {
+    const state = start(['guardian']);
+    const won = check(state, 's0-might', 20);
+    expect(won.state.party[0].hp).toBe(13);
+    expect(won.state.scene.index).toBe(1);
+  });
+
   test('clamps HP at zero and trust at -2', () => {
     const trust = check(
       patchState(start(['mediator', 'guardian', 'scout', 'specialist']), (draft) => {
@@ -56,32 +63,21 @@ describe('resources, recovery and items', () => {
     expect(restored.state.party[0].hp).toBe(4);
   });
 
-  test('help restores an overwhelmed ally to 3 HP and rejects invalid targets', () => {
+  test('one player at 0 HP ends the game as a loss', () => {
     const state = patchState(start(['guardian', 'specialist']), (draft) => {
       draft.party[1].hp = 0;
     });
-    expect(
-      resolveAction(state, testCampaign, {
-        kind: 'help',
-        actorId: actorId(state),
-        targetPlayerId: actorId(state),
-      }),
-    ).toEqual({ ok: false, code: 'INVALID_TARGET' });
-    const helped = ok(
+    const lost = ok(
       resolveAction(state, testCampaign, {
         kind: 'help',
         actorId: actorId(state),
         targetPlayerId: state.party[1].playerId,
       }),
     );
-    expect(helped.state.party[1].hp).toBe(3);
-    expect(
-      resolveAction(helped.state, testCampaign, {
-        kind: 'help',
-        actorId: actorId(helped.state),
-        targetPlayerId: state.party[0].playerId,
-      }),
-    ).toEqual({ ok: false, code: 'INVALID_TARGET' });
+    expect(lost.state.status).toBe('completed');
+    expect(lost.state.ending?.kind).toBe('failure');
+    expect(lost.state.party[1].hp).toBe(0);
+    expect(lost.state.suggestions).toEqual([]);
   });
 
   test('items restore clamped amounts and reject wasted uses', () => {

@@ -19,6 +19,7 @@
     "test:live": "node --import ./scripts/shim-server-only.mjs --import tsx scripts/live-smoke.ts"
   },
   "dependencies": {
+    "@fontsource/lxgw-wenkai-tc": "^5.3.0",
     "better-sqlite3": "^13.0.3",
     "next": "^16.3.5",
     "react": "^19.3.0",

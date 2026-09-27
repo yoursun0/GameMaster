@@ -28,7 +28,12 @@ export function riskEffects(
   npcId: string | undefined,
 ): Effect[] {
   if (risk === 'strain') {
-    if (outcome === 'success') return [{ type: 'progress', amount: 2 }];
+    if (outcome === 'success') {
+      return [
+        { type: 'progress', amount: 2 },
+        { type: 'damage', playerId: actorId, resource: 'hp', amount: 1 },
+      ];
+    }
     if (outcome === 'partial') {
       return [
         { type: 'progress', amount: 1 },
@@ -69,6 +74,33 @@ export function riskEffects(
     { type: 'trust', npcId, amount: -1 },
     { type: 'threat', amount: 1 },
   ];
+}
+
+export function tollEffects(
+  toll: 'none' | 'body' | 'focus' | 'reckless' | undefined,
+  actorId: string,
+  mp: number,
+): Effect[] {
+  if (!toll || toll === 'none') {
+    return [];
+  }
+  if (toll === 'body') {
+    return [{ type: 'damage', playerId: actorId, resource: 'hp', amount: 1 }];
+  }
+  if (toll === 'focus') {
+    return mp > 0
+      ? [{ type: 'damage', playerId: actorId, resource: 'mp', amount: 1 }]
+      : [{ type: 'damage', playerId: actorId, resource: 'hp', amount: 1 }];
+  }
+  const effects: Effect[] = [
+    { type: 'damage', playerId: actorId, resource: 'hp', amount: 2 },
+  ];
+  effects.push(
+    mp > 0
+      ? { type: 'damage', playerId: actorId, resource: 'mp', amount: 1 }
+      : { type: 'damage', playerId: actorId, resource: 'hp', amount: 1 },
+  );
+  return effects;
 }
 
 export function validateEffects(

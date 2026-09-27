@@ -8,6 +8,7 @@ export const interpretationSchema = z.discriminatedUnion('kind', [
       kind: z.literal('check'),
       approachId: z.string().min(1).max(80),
       intentSummary: z.string().min(1).max(300),
+      toll: z.enum(['none', 'body', 'focus', 'reckless']).optional(),
     })
     .strict(),
   z
@@ -40,7 +41,7 @@ export type Interpretation = z.infer<typeof interpretationSchema>;
 
 export const narrationSchema = z
   .object({
-    paragraphs: z.array(z.string().min(1)).min(1).max(3),
+    paragraphs: z.array(z.string().min(1)).min(1).max(4),
     quote: z.string().max(240).nullable(),
     prompt: z.string().max(200).nullable(),
     suggestions: z
@@ -60,6 +61,18 @@ export const narrationSchema = z
       })
       .strict()
       .nullable(),
+    harms: z
+      .array(
+        z
+          .object({
+            playerId: z.string().min(1),
+            hp: z.number().int().min(0).max(6).optional(),
+            mp: z.number().int().min(0).max(4).optional(),
+          })
+          .strict(),
+      )
+      .max(4)
+      .optional(),
     ending: z
       .object({
         summary: z.string().min(1).max(1000),
@@ -85,6 +98,12 @@ export type PublicApproachHint = {
   attribute: string;
 };
 
+export type PublicIdentity = {
+  playerId: string;
+  name: string;
+  role: string;
+};
+
 export type InterpretContext = {
   locale: 'en' | 'zh-Hant';
   actorId: string;
@@ -93,25 +112,37 @@ export type InterpretContext = {
   availableApproachIds: string[];
   worldTone?: string;
   scene?: { id: string; title: string; description: string };
-  party?: Array<{
-    playerId: string;
-    name: string;
-    hp: number;
-    mp: number;
-    active: boolean;
-  }>;
+  justActed?: PublicIdentity;
+  party?: Array<
+    PublicIdentity & {
+      hp: number;
+      mp: number;
+      active: boolean;
+    }
+  >;
   inventory?: Array<{ itemId: string; name: string; quantity: number }>;
   revealedFacts?: Array<{ id: string; text: string }>;
   journal?: string[];
-  recentDialogue?: Array<{ kind: string; text: string }>;
+  recentDialogue?: Array<{ kind: string; speaker?: string; text: string }>;
   approaches?: PublicApproachHint[];
+  objective?: string;
+  spineApproachId?: string;
+  exitOnClear?: string;
+  exitOnSetback?: string;
 };
 
 export type NarrateContext = {
   locale: 'en' | 'zh-Hant';
   actorId: string;
   text?: string;
+  justActed?: PublicIdentity;
+  speakToNext?: PublicIdentity | null;
   outcome: string;
+  resolutionNote?: string;
+  toll?: string;
+  objective?: string;
+  exitOnClear?: string;
+  exitOnSetback?: string;
   nextActorId?: string;
   availableApproachIds?: string[];
   partyPlayerIds?: string[];

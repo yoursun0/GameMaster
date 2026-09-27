@@ -80,4 +80,49 @@ describe('provider context secrecy', () => {
     expect(shown).toContain('test-secret');
     expect(shown).toContain('The genealogy was altered.');
   });
+
+  test('names the person who acted and does not hand their line to another seat', () => {
+    const state = createInitialState(
+      {
+        locale: 'zh-Hant',
+        players: [
+          { playerId: 'kaen', displayName: '凱恩', characterId: 'test-guardian' },
+          { playerId: 'lya', displayName: '莉雅', characterId: 'test-specialist' },
+        ],
+      },
+      testCampaign,
+    );
+    const after = structuredClone(state);
+    after.turn.activeSeat = 1;
+    const context = buildNarrateContext({
+      pack: testCampaign,
+      before: state,
+      after,
+      actorId: 'kaen',
+      text: '攻擊塔維',
+      outcome: 'success',
+      messages: [
+        {
+          seq: 1,
+          id: 'm1',
+          session_id: 's',
+          operation_id: null,
+          scene_id: 'scene',
+          kind: 'player',
+          payload_json: JSON.stringify({ actorId: 'kaen', text: '攻擊塔維' }),
+          created_at: '2026-09-27T00:00:00.000Z',
+        },
+      ],
+    });
+    const payload = narrateUserPayload(context);
+    expect(context.justActed?.name).toBe('凱恩');
+    expect(context.speakToNext?.name).toBe('莉雅');
+    expect(payload).toContain('攻擊塔維');
+    expect(context.recentDialogue?.[0]).toEqual({
+      kind: 'player',
+      speaker: '凱恩',
+      text: '攻擊塔維',
+    });
+    expect(payload).not.toContain('"speaker":"莉雅"');
+  });
 });

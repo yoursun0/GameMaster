@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
 import { createScriptedMaster, defaultNarration } from '@/server/ai/fixture';
+import { assertNarration } from '@/server/ai/validate';
 import { ProviderError } from '@/server/ai/types';
 import { openDatabase } from '@/server/db/connection';
 import { migrate } from '@/server/db/migrate';
@@ -62,6 +63,11 @@ describe('origin checks', () => {
     expect(originAllowed(null, 'http://localhost:3000')).toBe(false);
     expect(originAllowed('http://evil.test', 'http://localhost:3000')).toBe(false);
     expect(originAllowed('http://localhost:3000', 'http://localhost:3000')).toBe(true);
+    expect(originAllowed('http://127.0.0.1:3000', 'http://localhost:3000')).toBe(true);
+    expect(originAllowed('http://[::1]:3000', 'http://localhost:3000')).toBe(true);
+    expect(originAllowed('http://127.0.0.1:3001', 'http://localhost:3000')).toBe(false);
+    expect(originAllowed('https://127.0.0.1:3000', 'http://localhost:3000')).toBe(false);
+    expect(originAllowed('http://127.0.0.1:3000', 'https://play.example')).toBe(false);
   });
 });
 
@@ -261,6 +267,173 @@ describe('operations and fencing', () => {
     }
   });
 
+  test('a suggested action opens that approach even if the model calls it a question', async () => {
+    const { game } = service({
+      provider: createScriptedMaster({
+        interpret: { kind: 'question', question: 'Who sent them?' },
+      }),
+    });
+    const owner = game.issueOwner();
+    const session = game.createSession(owner, createBody()).session;
+    const result = await game.submitAction(owner, {
+      operationId: randomUUID(),
+      expectedRevision: 0,
+      actorId: session.party[0].playerId,
+      kind: 'act',
+      text: 'Ask carefully',
+    });
+    expect(result.operation.phase).toBe('awaiting_confirmation');
+    expect(result.operation.preview?.attribute).toBe('presence');
+    expect(result.session.revision).toBe(0);
+    expect(result.session.turn.activePlayerId).toBe(session.party[0].playerId);
+  });
+
+  test('unmatched text opens the scene fight instead of a clarification', async () => {
+    const { game } = service();
+    const owner = game.issueOwner();
+    const session = game.createSession(owner, createBody()).session;
+    const result = await game.submitAction(owner, {
+      operationId: randomUUID(),
+      expectedRevision: 0,
+      actorId: session.party[0].playerId,
+      kind: 'act',
+      text: 'Who sent this man?',
+    });
+    expect(result.operation.phase).toBe('awaiting_confirmation');
+    expect(result.operation.preview?.attribute).toBe('might');
+    expect(result.operation.preview?.tollHp).toBe(2);
+    expect(result.session.revision).toBe(0);
+    expect(result.session.turn.activePlayerId).toBe(session.party[0].playerId);
+  });
+
+  test('confirming the check that closes the scene still commits', async () => {
+    const { game } = service({
+      rollD20: () => 20,
+      provider: createScriptedMaster({
+        interpret: {
+          kind: 'check',
+          approachId: 's0-insight',
+          intentSummary: 'read the seal',
+        },
+        narrate: (context) =>
+          assertNarration(
+            {
+              paragraphs: ['The door holds. The yard is the way out.'],
+              quote: null,
+              prompt: 'One breath before you run.',
+              suggestions: [
+                { text: 'Hold the door', approachId: 's0-might' },
+                { text: 'Read the seal', approachId: 's0-insight' },
+              ],
+              journalFact: null,
+              ending: null,
+            },
+            context,
+          ),
+      }),
+    });
+    const owner = game.issueOwner();
+    const session = game.createSession(owner, {
+      createRequestId: randomUUID(),
+      worldId: 'test-campaign',
+      locale: 'en',
+      players: [
+        { displayName: 'P1', characterId: 'test-guardian' },
+        { displayName: 'P2', characterId: 'test-specialist' },
+      ],
+    }).session;
+    const preview = await game.submitAction(owner, {
+      operationId: randomUUID(),
+      expectedRevision: session.revision,
+      actorId: session.turn.activePlayerId,
+      kind: 'act',
+      text: 'I read the seal under the blades.',
+    });
+    expect(preview.operation.phase).toBe('awaiting_confirmation');
+    const confirmed = await game.confirmAction(
+      owner,
+      preview.operation.id,
+      preview.session.revision,
+    );
+    expect(confirmed.session.revision).toBe(1);
+    expect(confirmed.session.pendingOperation).toBeNull();
+    expect(confirmed.session.scene.index).toBe(0);
+    expect(confirmed.session.turn.activePlayerId).toBe(session.party[1].playerId);
+    expect(JSON.stringify(confirmed.session.recentMessages)).toContain('The door holds');
+  });
+
+  test('a derailing action is pulled back into the scene fight', async () => {
+    const { game } = service({
+      provider: createScriptedMaster({
+        interpret: {
+          kind: 'impossible',
+          reason: 'There is no dungeon in this inn.',
+        },
+      }),
+    });
+    const owner = game.issueOwner();
+    const session = game.createSession(owner, createBody()).session;
+    const result = await game.submitAction(owner, {
+      operationId: randomUUID(),
+      expectedRevision: 0,
+      actorId: session.party[0].playerId,
+      kind: 'act',
+      text: 'Paint the moon purple.',
+    });
+    expect(result.operation.phase).toBe('awaiting_confirmation');
+    expect(result.operation.preview?.attribute).toBe('might');
+    expect(result.operation.preview?.tollHp).toBe(2);
+    expect(result.operation.preview?.tollMp).toBe(1);
+    expect(result.session.revision).toBe(0);
+    expect(result.session.turn.activePlayerId).toBe(session.party[0].playerId);
+  });
+
+  test('a closed fight spends the turn on the exit instead of asking again', async () => {
+    const { game } = service({
+      rollD20: () => 20,
+      provider: createScriptedMaster({
+        narrate: () => ({
+          paragraphs: ['They take the north road.'],
+          quote: null,
+          prompt: 'Keep moving.',
+          suggestions: [],
+          journalFact: null,
+          ending: null,
+        }),
+      }),
+    });
+    const owner = game.issueOwner();
+    const session = game.createSession(owner, {
+      createRequestId: randomUUID(),
+      worldId: 'test-campaign',
+      locale: 'en',
+      players: [
+        { displayName: 'P1', characterId: 'test-guardian' },
+        { displayName: 'P2', characterId: 'test-specialist' },
+      ],
+    }).session;
+    const preview = await game.submitAction(owner, {
+      operationId: randomUUID(),
+      expectedRevision: 0,
+      actorId: session.party[0].playerId,
+      kind: 'act',
+      text: 'Watch the room',
+    });
+    const closed = await game.confirmAction(owner, preview.operation.id, 0);
+    expect(closed.session.scene.index).toBe(0);
+    expect(closed.session.turn.activePlayerId).toBe(session.party[1].playerId);
+    const left = await game.submitAction(owner, {
+      operationId: randomUUID(),
+      expectedRevision: closed.session.revision,
+      actorId: closed.session.turn.activePlayerId,
+      kind: 'act',
+      text: '留下殿後，獨自擋住追兵',
+    });
+    expect(left.session.pendingOperation).toBeNull();
+    expect(left.session.revision).toBe(closed.session.revision + 1);
+    expect(JSON.stringify(left.session.recentMessages)).toContain('north road');
+  });
+
   test('questions commit transcript without changing the turn', async () => {
     const { game } = service();
     const owner = game.issueOwner();
@@ -397,7 +570,7 @@ describe('crash interruption', () => {
       now: () => new Date(now),
       leaseMs: 1_000,
       provider: createScriptedMaster({
-        interpret: async () => {
+        narrate: async () => {
           throw new ProviderError('AI_TIMEOUT', 'crash');
         },
       }),
@@ -410,13 +583,14 @@ describe('crash interruption', () => {
       actorId: session.party[0].playerId,
       kind: 'pass',
     });
-    const failed = await game.submitAction(owner, {
+    const preview = await game.submitAction(owner, {
       operationId: randomUUID(),
       expectedRevision: 1,
       actorId: session.party[1].playerId,
       kind: 'act',
       text: 'I read the seal',
     });
+    const failed = await game.confirmAction(owner, preview.operation.id, 1);
     expect(failed.operation.canRetry).toBe(true);
     now += 5_000;
     const status = game.getOperation(owner, failed.operation.id);
