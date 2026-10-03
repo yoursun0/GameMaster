@@ -91,6 +91,9 @@ export function assertNarration(
   if (beat) {
     throw new ProviderError('AI_INVALID_OUTPUT', beat);
   }
+  if (context.itemUse) {
+    return { ...narration, harms: [] };
+  }
   return narration;
 }
 

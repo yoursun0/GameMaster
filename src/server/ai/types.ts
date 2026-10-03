@@ -131,6 +131,16 @@ export type InterpretContext = {
   exitOnSetback?: string;
 };
 
+export type ItemUse = {
+  itemId: string;
+  itemName: string;
+  actorName: string;
+  targetPlayerId: string;
+  targetName: string;
+  hpRestored: number;
+  mpRestored: number;
+};
+
 export type NarrateContext = {
   locale: 'en' | 'zh-Hant';
   actorId: string;
@@ -138,6 +148,7 @@ export type NarrateContext = {
   justActed?: PublicIdentity;
   speakToNext?: PublicIdentity | null;
   outcome: string;
+  itemUse?: ItemUse | null;
   resolutionNote?: string;
   toll?: string;
   objective?: string;

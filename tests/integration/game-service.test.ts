@@ -663,3 +663,61 @@ describe('crash interruption', () => {
     expect(status.session.party[1].mp).toBe(8);
   });
 });
+
+describe('item use narration', () => {
+  test('writes a scene for a spent item and keeps the heal', async () => {
+    let restored = 0;
+    const { db, game } = service({
+      provider: createScriptedMaster({
+        narrate: (context) => {
+          restored = context.itemUse?.hpRestored ?? 0;
+          return {
+            paragraphs: ['龍媽拔開療傷藥水，按上自己的傷口。「喝。」塔維說「還站得住。」'],
+            quote: null,
+            prompt: '下一個人。',
+            suggestions: [
+              { text: 'Hold the door', approachId: 's0-might' },
+              { text: 'Read the seal', approachId: 's0-insight' },
+            ],
+            journalFact: null,
+            ending: null,
+            harms: [{ playerId: 'ignored', hp: 2, mp: 0 }],
+          };
+        },
+      }),
+    });
+    const owner = game.issueOwner();
+    const body = createBody();
+    body.locale = 'zh-Hant';
+    body.players[0] = { displayName: '龍媽', characterId: 'test-guardian' };
+    const created = game.createSession(owner, body).session;
+    const row = db
+      .prepare('SELECT state_json FROM sessions WHERE id = ?')
+      .get(created.sessionId) as { state_json: string };
+    const state = JSON.parse(row.state_json) as { party: Array<{ hp: number }> };
+    state.party[0].hp = 2;
+    db.prepare('UPDATE sessions SET state_json = ? WHERE id = ?').run(
+      JSON.stringify(state),
+      created.sessionId,
+    );
+    const loaded = game.getSession(owner).session!;
+    const result = await game.submitAction(owner, {
+      operationId: randomUUID(),
+      expectedRevision: loaded.revision,
+      actorId: loaded.party[0].playerId,
+      kind: 'use_item',
+      itemId: 'test-restorative',
+      targetPlayerId: loaded.party[0].playerId,
+    });
+    expect(restored).toBe(4);
+    expect(result.session.party[0].hp).toBe(6);
+    expect(result.session.inventory.find((item) => item.itemId === 'test-restorative')?.quantity).toBe(1);
+    const gm = result.session.recentMessages.filter((message) => message.kind === 'gm');
+    const last = gm.at(-1)?.payload as { paragraphs?: string[]; harms?: unknown[] };
+    expect(last.paragraphs?.join('')).toContain('喝');
+    expect(last.paragraphs?.join('')).not.toContain('使用了物品');
+    expect(last.harms ?? []).toEqual([]);
+    const players = result.session.recentMessages.filter((message) => message.kind === 'player');
+    expect(String((players.at(-1)?.payload as { text?: string }).text)).toContain('療傷藥水');
+  });
+});

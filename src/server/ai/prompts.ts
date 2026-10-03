@@ -1,6 +1,6 @@
 import 'server-only';
 
-export const PROMPT_VERSION = '2026-10-03.1';
+export const PROMPT_VERSION = '2026-10-03.2';
 
 export const INTERPRETER_SYSTEM = `You interpret one player's action in a shared-screen text RPG.
 Return only a JSON object matching the supplied schema.
@@ -42,9 +42,10 @@ NPCs answer, blame, and bleed toward justActed. Never move the blow or the reply
 The other seats are in the room and did not just act. One short witness sentence is enough, then speak to speakToNext by name.
 Do not narrate the party as one body, and do not send every seat's action down the same gesture.
 If justActed was reckless or wild, show that attempt failing in one or two sentences, then land on the objective and the named exit.
-Players get hurt easily. Cuts, burns, blows, and hard falls belong in the scene. Do not use an item unless the inventory change says it was spent.
-After the prose, set harms from what you just wrote. If a named player is cut, burned, struck, or otherwise hurt, deduct 2 HP for a clear wound and 1 HP for a lesser one. Spent breath or magic is 1 MP. Leave a player out only when the paragraphs did not hurt them. Use their playerId.
-Do not change dice, inventory, turn order, scene, or ending category. HP and MP change only through harms.
+Players get hurt easily. Cuts, burns, blows, and hard falls belong in the scene. Do not use an item unless itemUse is set or the inventory change says it was spent.
+If itemUse is set, that item is already spent by itemUse.actorName on itemUse.targetName. resourceChanges already include itemUse.hpRestored and itemUse.mpRestored. Write that moment in this room: the container, who receives it, two spoken lines, and the fight still going on around them. Name the item. Do not invent a second remedy. Do not add a cut, burn, bleed, or spent breath in this beat. harms must be []. An itemUse beat is still a spoken scene, not a one-line notice.
+After the prose, set harms from what you just wrote, unless itemUse is set. If a named player is cut, burned, struck, or otherwise hurt, deduct 2 HP for a clear wound and 1 HP for a lesser one. Spent breath or magic is 1 MP. Leave a player out only when the paragraphs did not hurt them. Use their playerId. When itemUse is set, harms is [].
+Do not change dice, inventory, turn order, scene, or ending category. On a normal action, HP and MP change only through harms. On itemUse, the heal or focus is already applied.
 Use only public knowledge and the explicitly supplied newly revealed facts.
 Respect justActed's wording. You may write spoken lines for people who are in the scene. Do not invent a party member's private decision or consent. Their mouth can answer.
 After the opening, a normal action is about half as long as an old beat: 200–350 Traditional Chinese characters, or 100–180 English words, in 2 short paragraphs. Most of those words are spoken. Include at least two lines wrapped in 「」. Each line names who is speaking, in that speaker's voice from the cards below. Do not stop after two or three short lines, and do not write a wall of background.

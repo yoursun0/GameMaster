@@ -2,7 +2,7 @@ import 'server-only';
 
 import { randomUUID } from 'node:crypto';
 import { buildNarrateContext } from '@/server/ai/context';
-import type { GameMaster, Interpretation, Narration } from '@/server/ai/types';
+import type { GameMaster, Interpretation, ItemUse, Narration } from '@/server/ai/types';
 import { ProviderError, narrationSchema } from '@/server/ai/types';
 import type { WorldPack } from '@/server/content/types';
 import type { SqliteDatabase } from '@/server/db/connection';
@@ -92,6 +92,29 @@ export type ActionResponse = {
   operation: PendingOperationDTO;
   committedRevision?: number;
 };
+
+function spentItem(
+  pack: WorldPack,
+  before: SessionState,
+  after: SessionState,
+  command: SubmitAction,
+): ItemUse | null {
+  if (command.kind !== 'use_item') return null;
+  const locale = after.locale;
+  const beforeTarget = before.party.find((member) => member.playerId === command.targetPlayerId);
+  const afterTarget = after.party.find((member) => member.playerId === command.targetPlayerId);
+  const actor = after.party.find((member) => member.playerId === command.actorId);
+  const item = pack.items.find((entry) => entry.id === command.itemId);
+  return {
+    itemId: command.itemId,
+    itemName: item?.name[locale] ?? command.itemId,
+    actorName: actor?.displayName ?? '',
+    targetPlayerId: command.targetPlayerId,
+    targetName: afterTarget?.displayName ?? '',
+    hpRestored: Math.max(0, (afterTarget?.hp ?? 0) - (beforeTarget?.hp ?? 0)),
+    mpRestored: Math.max(0, (afterTarget?.mp ?? 0) - (beforeTarget?.mp ?? 0)),
+  };
+}
 
 export class GameService {
   private readonly repo: GameRepository;
@@ -613,11 +636,17 @@ export class GameService {
         currentRevision: row.revision,
       });
     }
-    const plan = this.makePlan(command, result, false, {
-      kind: interpretation.kind,
-      note: resolutionNote(interpretation),
-      toll: interpretation.kind === 'check' ? (interpretation.toll ?? 'none') : 'none',
-    });
+    const plan = this.makePlan(
+      command,
+      result,
+      false,
+      {
+        kind: interpretation.kind,
+        note: resolutionNote(interpretation),
+        toll: interpretation.kind === 'check' ? (interpretation.toll ?? 'none') : 'none',
+      },
+      pack,
+    );
     this.savePlan(op, plan, 'narrating');
     return this.finishFromResolution(owner, operationId);
   }
@@ -670,6 +699,7 @@ export class GameService {
           engineAction.kind === 'check'
             ? { kind: 'check', toll: engineAction.toll ?? 'none' }
             : undefined,
+          pack,
         );
         this.savePlan(fresh, created, 'narrating');
         return created;
@@ -699,6 +729,7 @@ export class GameService {
                 (command.kind === 'ask' ? 'question' : command.kind),
               resolutionNote: plan.resolutionNote ?? undefined,
               toll: plan.toll ?? undefined,
+              itemUse: spentItem(pack, state, plan.nextState, command),
               check: plan.engineCheck
                 ? {
                     die: plan.engineCheck.die,
@@ -783,39 +814,41 @@ export class GameService {
             });
           }
         }
-        const beforeActor = beforeState.party.find((entry) => entry.playerId === plan.actorId);
-        const actorNow = nextState.party.find((entry) => entry.playerId === plan.actorId);
-        const mechanicalHp =
-          beforeActor && actorNow ? Math.max(0, beforeActor.hp - actorNow.hp) : 0;
-        const tollMp = previewToll(plan.toll ?? 'none', beforeActor?.mp ?? 0).tollMp;
-        notedHarms = storyHarm({
-          paragraphs: narration.paragraphs,
-          party: nextState.party,
-          proposed: narration.harms,
-        });
-        for (const harm of notedHarms) {
-          const member = nextState.party.find((entry) => entry.playerId === harm.playerId);
-          if (!member) continue;
-          const onActor = harm.playerId === plan.actorId;
-          member.hp = Math.max(0, member.hp - (onActor ? extraAfterToll(harm.hp, mechanicalHp) : harm.hp));
-          member.mp = Math.max(0, member.mp - (onActor ? extraAfterToll(harm.mp, tollMp) : harm.mp));
-          if (onActor) {
-            // The line shows the higher of the check toll and the prose wound. The meter already holds the toll.
-            harm.hp = Math.max(harm.hp, mechanicalHp);
-            harm.mp = Math.max(harm.mp, tollMp);
-          }
-          if (harm.hp > 0) {
-            member.lastWoundHp = Math.min(6, harm.hp);
-          }
-        }
-        if (allDown(nextState) && nextState.status === 'active') {
-          const moved = nextState.scene.index !== beforeState.scene.index;
-          if (moved) {
-            for (const member of nextState.party) {
-              if (member.hp <= 0) member.hp = 1;
+        if (plan.resolutionKind !== 'use_item') {
+          const beforeActor = beforeState.party.find((entry) => entry.playerId === plan.actorId);
+          const actorNow = nextState.party.find((entry) => entry.playerId === plan.actorId);
+          const mechanicalHp =
+            beforeActor && actorNow ? Math.max(0, beforeActor.hp - actorNow.hp) : 0;
+          const tollMp = previewToll(plan.toll ?? 'none', beforeActor?.mp ?? 0).tollMp;
+          notedHarms = storyHarm({
+            paragraphs: narration.paragraphs,
+            party: nextState.party,
+            proposed: narration.harms,
+          });
+          for (const harm of notedHarms) {
+            const member = nextState.party.find((entry) => entry.playerId === harm.playerId);
+            if (!member) continue;
+            const onActor = harm.playerId === plan.actorId;
+            member.hp = Math.max(0, member.hp - (onActor ? extraAfterToll(harm.hp, mechanicalHp) : harm.hp));
+            member.mp = Math.max(0, member.mp - (onActor ? extraAfterToll(harm.mp, tollMp) : harm.mp));
+            if (onActor) {
+              // The line shows the higher of the check toll and the prose wound. The meter already holds the toll.
+              harm.hp = Math.max(harm.hp, mechanicalHp);
+              harm.mp = Math.max(harm.mp, tollMp);
             }
-          } else {
-            nextState = recoverWipe(nextState, pack);
+            if (harm.hp > 0) {
+              member.lastWoundHp = Math.min(6, harm.hp);
+            }
+          }
+          if (allDown(nextState) && nextState.status === 'active') {
+            const moved = nextState.scene.index !== beforeState.scene.index;
+            if (moved) {
+              for (const member of nextState.party) {
+                if (member.hp <= 0) member.hp = 1;
+              }
+            } else {
+              nextState = recoverWipe(nextState, pack);
+            }
           }
         }
         if (nextState.ending && narration.ending) {
@@ -920,16 +953,27 @@ export class GameService {
     command: SubmitAction,
     result: Extract<ReturnType<typeof resolveAction>, { ok: true }>,
     fromCheck: boolean,
-    resolution?: {
+    resolution: {
       kind: string;
       note?: string;
       toll?: 'none' | 'body' | 'focus' | 'reckless';
-    },
+    } | undefined,
+    pack: WorldPack,
   ): ResolvedPlan {
     const locale = result.state.locale;
     const actor = result.state.party.find((member) => member.playerId === command.actorId);
     const name = actor?.displayName ?? 'Someone';
     const text = 'text' in command ? command.text : null;
+    const spent =
+      command.kind === 'use_item'
+        ? {
+            item:
+              pack.items.find((item) => item.id === command.itemId)?.name[locale] ?? command.itemId,
+            target:
+              result.state.party.find((member) => member.playerId === command.targetPlayerId)
+                ?.displayName ?? '',
+          }
+        : null;
     const localKey =
       command.kind === 'pass'
         ? 'narrate.pass'
@@ -943,17 +987,25 @@ export class GameService {
                 ? 'narrate.cover'
                 : 'narrate.automatic';
     const resolutionKind =
-      resolution?.kind ?? (command.kind === 'ask' ? 'question' : null);
+      resolution?.kind ??
+      (command.kind === 'ask' ? 'question' : command.kind === 'use_item' ? 'use_item' : null);
     const narratesWithoutCheck =
       resolutionKind === 'automatic' ||
       resolutionKind === 'question' ||
       resolutionKind === 'clarify' ||
       resolutionKind === 'impossible';
     const needsNarrator =
-      Boolean(result.sceneResult) || fromCheck || narratesWithoutCheck;
+      Boolean(result.sceneResult) || fromCheck || narratesWithoutCheck || command.kind === 'use_item';
+    const playerText =
+      text ??
+      (command.kind === 'pass'
+        ? 'pass'
+        : spent
+          ? uiString(locale, 'narrate.itemAct', spent)
+          : null);
     return {
       actorId: command.actorId,
-      playerText: text ?? (command.kind === 'pass' ? 'pass' : null),
+      playerText,
       engineCheck: result.check,
       nextState: result.state,
       consumedTurn: result.consumedTurn,
@@ -965,11 +1017,12 @@ export class GameService {
       localParagraphs: [
         uiString(locale, localKey, {
           name,
-          target: 'targetPlayerId' in command ? command.targetPlayerId : '',
+          item: spent?.item ?? '',
+          target: spent?.target || ('targetPlayerId' in command ? command.targetPlayerId : ''),
         }),
       ],
       messageIds: {
-        player: text || command.kind === 'pass' ? randomUUID() : undefined,
+        player: playerText ? randomUUID() : undefined,
         check: result.check ? randomUUID() : undefined,
         gm: randomUUID(),
       },

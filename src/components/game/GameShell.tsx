@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
@@ -85,7 +85,9 @@ export function GameShell() {
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const storyRef = useRef<HTMLDivElement>(null);
+  const imeLock = useRef(false);
+  const storyTail = session?.recentMessages.at(-1)?.id ?? '';
   const locale: Locale = session?.locale ?? 'zh-Hant';
   const t = (key: Parameters<typeof uiString>[1], vars?: Record<string, string>) =>
     uiString(locale, key, vars);
@@ -122,6 +124,18 @@ export function GameShell() {
     }, 2000);
     return () => window.clearInterval(timer);
   }, [session?.pendingOperation]);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      const node = storyRef.current;
+      if (!node) return;
+      if (node.scrollHeight > node.clientHeight + 1) {
+        node.scrollTop = node.scrollHeight;
+      }
+      node.querySelector('[data-story-end]')?.scrollIntoView({ block: 'end' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [session?.revision, storyTail]);
 
   async function commit(body: Record<string, unknown>) {
     if (!session) return;
@@ -188,7 +202,7 @@ export function GameShell() {
   );
 
   return (
-    <div className={sheetOpen ? `${styles.shell} ${styles.sheetOpen}` : styles.shell} data-testid="stage">
+    <div className={styles.shell} data-testid="stage">
       <header className={styles.top}>
         <h1 className={styles.plaque}>{session.world.title}</h1>
         <div className={styles.topMeta}>
@@ -228,7 +242,7 @@ export function GameShell() {
           </article>
         ))}
       </aside>
-      <div className={styles.storyWrap}>
+      <div className={styles.storyWrap} ref={storyRef}>
         <main className={styles.story}>
           <p className={styles.place}>
             {session.scene.location} · {session.scene.title}
@@ -265,6 +279,7 @@ export function GameShell() {
               </button>
             </section>
           ) : null}
+          <div className={styles.storyEnd} data-story-end="" />
         </main>
       </div>
       <aside className={styles.side}>
@@ -295,13 +310,14 @@ export function GameShell() {
             {session.inventory.map((item) => (
               <li key={`${item.itemId}-${item.name}`}>
                 <ItemGlyph itemId={item.itemId} />
-                <span>
-                  {item.name}
-                  {item.usable ? ` · ${item.description}` : ''}
+                <span className={styles.itemCopy}>
+                  <span>{item.name}</span>
+                  {item.usable ? <span className={styles.itemDesc}>{item.description}</span> : null}
                 </span>
                 <span className={styles.qty}>× {item.quantity}</span>
-                {item.usable
-                  ? session.party.map((member) => (
+                {item.usable ? (
+                  <div className={styles.itemUses}>
+                    {session.party.map((member) => (
                       <button
                         key={member.playerId}
                         type="button"
@@ -317,8 +333,9 @@ export function GameShell() {
                       >
                         {t('ui.useOn', { name: member.displayName })}
                       </button>
-                    ))
-                  : null}
+                    ))}
+                  </div>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -372,6 +389,22 @@ export function GameShell() {
               value={text}
               maxLength={600}
               onChange={(event) => setText(event.target.value)}
+              onCompositionStart={() => {
+                imeLock.current = true;
+              }}
+              onCompositionEnd={() => {
+                imeLock.current = true;
+                window.setTimeout(() => {
+                  imeLock.current = false;
+                }, 0);
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' || event.shiftKey) return;
+                if (imeLock.current || event.nativeEvent.isComposing || event.keyCode === 229) return;
+                event.preventDefault();
+                if (busy || !text.trim()) return;
+                void commit({ kind: 'act', text, useAbility: false });
+              }}
               placeholder={t('ui.composerHint')}
             />
           </div>
@@ -391,47 +424,6 @@ export function GameShell() {
               onClick={() => void commit({ kind: 'ask', text })}
             >
               {t('ui.ask')}
-            </button>
-            <p className={styles.hint}>{t('ui.askHint')}</p>
-            <button type="button" className={styles.ghost} disabled={busy} onClick={() => void commit({ kind: 'pass' })}>
-              {t('ui.pass')}
-            </button>
-            {session.scene.canRest ? (
-              <button type="button" className={styles.act} disabled={busy} onClick={() => void commit({ kind: 'rest' })}>
-                {t('ui.rest')}
-                <span className={styles.hint}> {t('ui.restDetail')}</span>
-              </button>
-            ) : null}
-            {session.party.length > 1
-              ? session.party
-                  .filter((member) => member.playerId !== active?.playerId)
-                  .map((member) => (
-                    <button
-                      key={member.playerId}
-                      type="button"
-                      className={styles.ghost}
-                      disabled={busy || Boolean(active?.overwhelmed)}
-                      onClick={() => void commit({ kind: 'cover', targetPlayerId: member.playerId })}
-                    >
-                      {t('ui.cover', { name: member.displayName })}
-                    </button>
-                  ))
-              : null}
-            {session.party
-              .filter((member) => member.playerId !== active?.playerId && member.hp <= 0)
-              .map((member) => (
-                <button
-                  key={`help-${member.playerId}`}
-                  type="button"
-                  className={styles.act}
-                  disabled={busy || Boolean(active?.overwhelmed)}
-                  onClick={() => void commit({ kind: 'help', targetPlayerId: member.playerId })}
-                >
-                  {t('ui.help', { name: member.displayName })}
-                </button>
-              ))}
-            <button type="button" className={styles.ghost} onClick={() => setSheetOpen((open) => !open)}>
-              {t('ui.sheet')}
             </button>
             {retrying ? (
               <button type="button" className={styles.ghost} disabled={busy} onClick={() => void confirm('retry')}>

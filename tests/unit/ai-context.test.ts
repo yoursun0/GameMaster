@@ -125,4 +125,35 @@ describe('provider context secrecy', () => {
     });
     expect(payload).not.toContain('"speaker":"莉雅"');
   });
+
+  test('names the spent item and the heal already applied', () => {
+    const state = createInitialState(
+      {
+        locale: 'zh-Hant',
+        players: [{ playerId: 'kaen', displayName: '龍媽', characterId: 'test-guardian' }],
+      },
+      testCampaign,
+    );
+    const payload = narrateUserPayload(
+      buildNarrateContext({
+        pack: testCampaign,
+        before: state,
+        after: state,
+        actorId: 'kaen',
+        outcome: 'use_item',
+        itemUse: {
+          itemId: 'test-restorative',
+          itemName: '療傷藥水',
+          actorName: '龍媽',
+          targetPlayerId: 'kaen',
+          targetName: '龍媽',
+          hpRestored: 4,
+          mpRestored: 0,
+        },
+      }),
+    );
+    expect(payload).toContain('療傷藥水');
+    expect(payload).toContain('"hpRestored":4');
+    expect(payload).toContain('"outcome":"use_item"');
+  });
 });

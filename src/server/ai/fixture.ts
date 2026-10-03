@@ -59,6 +59,22 @@ export function createScriptedMaster(
 export function defaultNarration(context: NarrateContext): Narration {
   const prompt =
     context.locale === 'zh-Hant' ? '你要怎麼做？' : 'What do you do next?';
+  if (context.itemUse) {
+    const item = context.itemUse;
+    const paragraph =
+      context.locale === 'zh-Hant'
+        ? `${item.actorName}拔開${item.itemName}，送到${item.targetName}唇邊。「喝。」${item.targetName}抹了抹嘴，說「還站得住。」外頭的聲音沒有停。`
+        : `${item.actorName} unstops the ${item.itemName} and tips it to ${item.targetName}. 「Drink.」 ${item.targetName} answers 「I can stand.」 The noise outside does not stop.`;
+    return {
+      paragraphs: [paragraph],
+      quote: null,
+      prompt: context.endingKind ? null : prompt,
+      suggestions: [],
+      journalFact: null,
+      ending: null,
+      harms: [],
+    };
+  }
   const paragraph =
     context.locale === 'zh-Hant'
       ? `主持人記下結果：${context.outcome}。`

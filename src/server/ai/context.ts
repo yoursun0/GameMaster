@@ -141,6 +141,7 @@ export function buildNarrateContext(args: {
   resolutionNote?: string;
   toll?: string;
   check?: NarrateContext['check'];
+  itemUse?: NarrateContext['itemUse'];
   messages?: MessageRow[];
 }): NarrateContext {
   const locale = args.after.locale;
@@ -161,6 +162,7 @@ export function buildNarrateContext(args: {
     ),
     speakToNext: identify(args.pack, args.after.party[args.after.turn.activeSeat], locale) ?? null,
     outcome: args.outcome,
+    itemUse: args.itemUse ?? null,
     resolutionNote: args.resolutionNote,
     toll: args.toll,
     objective: scene.objective[locale],
@@ -248,6 +250,7 @@ export function narrateUserPayload(context: NarrateContext): string {
     justActed: context.justActed ?? null,
     speakToNext: context.speakToNext ?? null,
     outcome: context.outcome,
+    itemUse: context.itemUse ?? null,
     resolutionNote: context.resolutionNote ?? null,
     toll: context.toll ?? null,
     objective: context.objective,
