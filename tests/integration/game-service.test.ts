@@ -96,6 +96,40 @@ describe('session ownership', () => {
     ]);
   });
 
+  test('reading an active session seals a fallen player as a loss', async () => {
+    const { db, game } = service();
+    const owner = game.issueOwner();
+    const created = game.createSession(owner, createBody());
+    const row = db
+      .prepare('SELECT state_json, revision FROM sessions WHERE id = ?')
+      .get(created.session.sessionId) as { state_json: string; revision: number };
+    const state = JSON.parse(row.state_json) as { party: Array<{ hp: number }> };
+    state.party[0].hp = 0;
+    db.prepare('UPDATE sessions SET state_json = ? WHERE id = ?').run(
+      JSON.stringify(state),
+      created.session.sessionId,
+    );
+    const loaded = game.getSession(owner).session;
+    expect(loaded?.status).toBe('completed');
+    expect(loaded?.ending?.kind).toBe('failure');
+    expect(loaded?.ending?.summary).toBe('P1 has fallen. You are lost.');
+    expect(loaded?.ending?.epilogues).toEqual([]);
+    expect(loaded?.party[0].hp).toBe(0);
+    expect(loaded?.party[1].hp).toBeGreaterThan(0);
+    expect(loaded?.revision).toBe(row.revision + 1);
+    expect(loaded?.scene.index).toBe(0);
+    const again = game.getSession(owner).session;
+    expect(again?.revision).toBe(loaded?.revision);
+    await expect(
+      game.submitAction(owner, {
+        operationId: randomUUID(),
+        expectedRevision: loaded!.revision,
+        actorId: loaded!.party[0].playerId,
+        kind: 'pass',
+      }),
+    ).rejects.toMatchObject({ code: 'SESSION_ENDED' });
+  });
+
   test('two owners cannot read each other\'s operations', async () => {
     const { game } = service();
     const a = game.issueOwner();

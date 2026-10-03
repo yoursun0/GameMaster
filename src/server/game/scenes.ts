@@ -27,10 +27,6 @@ export function endingKind(
   return 'failure';
 }
 
-export function allOverwhelmed(state: SessionState): boolean {
-  return state.party.every((member) => member.hp === 0);
-}
-
 export function anyDown(state: SessionState): boolean {
   return state.party.some((member) => member.hp <= 0);
 }

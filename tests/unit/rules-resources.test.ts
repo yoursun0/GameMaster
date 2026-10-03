@@ -28,6 +28,12 @@ describe('resources, recovery and items', () => {
       1,
     );
     expect(result.state.party[0].hp).toBe(0);
+    expect(result.sceneResult).toBe('setback');
+    expect(result.state.status).toBe('completed');
+    expect(result.state.ending?.kind).toBe('failure');
+    expect(result.state.ending?.epilogues).toEqual([]);
+    expect(result.state.scene.index).toBe(0);
+    expect(result.state.ending?.summary).toBe('Player 1 has fallen. You are lost.');
   });
 
   test('grants a unique story item only once', () => {
@@ -40,18 +46,23 @@ describe('resources, recovery and items', () => {
     expect(state.inventory.filter((item) => item.itemId === 'test-seal')).toHaveLength(1);
   });
 
-  test('zero-HP actors cannot take risky actions but can use a restorative', () => {
+  test('a player already at 0 HP loses before a check or a restorative', () => {
     const state = patchState(start(['guardian', 'specialist']), (draft) => {
       draft.party[0].hp = 0;
     });
-    expect(
+    const risky = ok(
       resolveAction(
         state,
         testCampaign,
         { kind: 'check', actorId: actorId(state), approachId: 's0-might' },
         () => 20,
       ),
-    ).toEqual({ ok: false, code: 'INVALID_INPUT' });
+    );
+    expect(risky.sceneResult).toBeNull();
+    expect(risky.state.status).toBe('completed');
+    expect(risky.state.ending?.kind).toBe('failure');
+    expect(risky.state.party[0].hp).toBe(0);
+    expect(risky.state.ending?.summary).toBe('Player 1 has fallen. You are lost.');
     const restored = ok(
       resolveAction(state, testCampaign, {
         kind: 'use_item',
@@ -60,7 +71,9 @@ describe('resources, recovery and items', () => {
         targetPlayerId: actorId(state),
       }),
     );
-    expect(restored.state.party[0].hp).toBe(4);
+    expect(restored.state.status).toBe('completed');
+    expect(restored.state.party[0].hp).toBe(0);
+    expect(restored.state.suggestions).toEqual([]);
   });
 
   test('one player at 0 HP ends the game as a loss', () => {
@@ -147,19 +160,41 @@ describe('resources, recovery and items', () => {
     ).toEqual({ ok: false, code: 'INVALID_INPUT' });
   });
 
-  test('group overwhelm setbacks immediately and recovers everyone to 3 HP', () => {
+  test('one player already at 0 HP is a loss with no heal and no scene advance', () => {
     const state = patchState(start(['guardian', 'specialist']), (draft) => {
       draft.party[0].hp = 1;
       draft.party[1].hp = 0;
     });
     const result = check(state, 's0-might', 1);
-    expect(result.sceneResult).toBe('setback');
-    expect(result.state.scene.index).toBe(1);
-    expect(result.state.party.every((member) => member.hp === 3)).toBe(true);
+    expect(result.sceneResult).toBeNull();
+    expect(result.state.status).toBe('completed');
+    expect(result.state.ending?.kind).toBe('failure');
+    expect(result.state.ending?.epilogues).toEqual([]);
+    expect(result.state.scene.index).toBe(0);
+    expect(result.state.party[0].hp).toBe(1);
+    expect(result.state.party[1].hp).toBe(0);
     expect(result.state.party[1].mp).toBe(8);
+    expect(result.state.ending?.summary).toBe('Player 2 has fallen. You are lost.');
   });
 
-  test('scene transition clears conditions and recovers only zero HP', () => {
+  test('scene transition clears conditions and leaves living HP unchanged', () => {
+    const state = patchState(start(['guardian']), (draft) => {
+      draft.party[0].hp = 8;
+      draft.party[0].conditions.push({
+        id: 'exposed',
+        appliedAtAction: 0,
+        expires: 'scene_end',
+      });
+      draft.scene.closingReason = 'cleared';
+    });
+    const result = pass(state);
+    expect(result.state.scene.index).toBe(1);
+    expect(result.state.party[0].hp).toBe(8);
+    expect(result.state.party[0].conditions).toEqual([]);
+    expect(result.state.status).toBe('active');
+  });
+
+  test('a player at 0 HP does not transition or recover', () => {
     const state = patchState(start(['guardian']), (draft) => {
       draft.party[0].hp = 0;
       draft.party[0].conditions.push({
@@ -170,8 +205,13 @@ describe('resources, recovery and items', () => {
       draft.scene.closingReason = 'cleared';
     });
     const result = pass(state);
-    expect(result.state.scene.index).toBe(1);
-    expect(result.state.party[0].hp).toBe(3);
-    expect(result.state.party[0].conditions).toEqual([]);
+    expect(result.sceneResult).toBeNull();
+    expect(result.state.status).toBe('completed');
+    expect(result.state.ending?.kind).toBe('failure');
+    expect(result.state.scene.index).toBe(0);
+    expect(result.state.party[0].hp).toBe(0);
+    expect(result.state.party[0].conditions).toEqual([
+      { id: 'exposed', appliedAtAction: 0, expires: 'scene_end' },
+    ]);
   });
 });

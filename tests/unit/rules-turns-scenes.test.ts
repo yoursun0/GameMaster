@@ -212,7 +212,7 @@ describe('turns, scenes and endings', () => {
     });
   });
 
-  test('final-scene group overwhelm resolves an ending', () => {
+  test('a player already at 0 HP on the final scene is a loss without campaign epilogues', () => {
     const state = patchState(start(['guardian', 'specialist']), (draft) => {
       draft.scene.index = 7;
       draft.scene.challengeId = 'test-challenge-7';
@@ -221,9 +221,14 @@ describe('turns, scenes and endings', () => {
       draft.cleanSceneCount = 2;
     });
     const result = check(state, 's7-might', 1);
-    expect(result.sceneResult).toBe('setback');
+    expect(result.sceneResult).toBeNull();
     expect(result.state.status).toBe('completed');
     expect(result.state.ending?.kind).toBe('failure');
+    expect(result.state.ending?.epilogues).toEqual([]);
+    expect(result.state.scene.index).toBe(7);
+    expect(result.state.party[0].hp).toBe(1);
+    expect(result.state.party[1].hp).toBe(0);
+    expect(result.state.ending?.summary).toBe('Player 2 has fallen. You are lost.');
   });
 
   test('an already-satisfied unlock requirement does not reopen a failed approach', () => {
@@ -264,13 +269,16 @@ describe('turns, scenes and endings', () => {
     expect(state.ending?.epilogues).toHaveLength(1);
   });
 
-  test('four-player all-failure play reaches a failure ending', () => {
+  test('four-player all-failure play ends when the first player falls', () => {
     const state = playUntilDone(
       ['guardian', 'specialist', 'mediator', 'scout'],
       1,
     );
     expect(state.status).toBe('completed');
     expect(state.ending?.kind).toBe('failure');
-    expect(state.ending?.epilogues).toHaveLength(4);
+    expect(state.ending?.epilogues).toEqual([]);
+    expect(state.ending?.summary).toMatch(/has fallen\. You are lost\./);
+    expect(state.party.some((member) => member.hp <= 0)).toBe(true);
+    expect(state.scene.index).toBeLessThan(7);
   });
 });
