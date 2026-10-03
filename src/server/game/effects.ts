@@ -156,11 +156,22 @@ export function applyEffects(
   effects: Effect[],
 ): SessionState {
   const next: SessionState = structuredClone(state);
+  const wounded = new Set<string>();
   for (const effect of effects) {
     switch (effect.type) {
       case 'damage': {
         const target = member(next, effect.playerId);
-        target[effect.resource] = Math.max(0, target[effect.resource] - effect.amount);
+        const before = target[effect.resource];
+        target[effect.resource] = Math.max(0, before - effect.amount);
+        if (effect.resource === 'hp') {
+          const dropped = before - target.hp;
+          if (dropped > 0) {
+            target.lastWoundHp = wounded.has(target.playerId)
+              ? Math.min(6, (target.lastWoundHp ?? 0) + dropped)
+              : dropped;
+            wounded.add(target.playerId);
+          }
+        }
         break;
       }
       case 'restore': {

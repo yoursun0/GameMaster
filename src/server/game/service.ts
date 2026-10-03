@@ -31,9 +31,8 @@ import {
   stakesFor,
 } from '@/server/game/rules';
 import { openingParagraphs } from '@/server/content/opening';
-import { storyHarm } from '@/server/game/harm';
-import { anyDown, defeatParty } from '@/server/game/scenes';
-import { currentScene } from '@/server/game/scenes';
+import { extraAfterToll, storyHarm } from '@/server/game/harm';
+import { allDown, currentScene, orderSuggestionsForSeat, recoverWipe, seatJob } from '@/server/game/scenes';
 import type { EngineAction, SessionState } from '@/server/game/schemas';
 import { PROFILE_STATS, attributeValue, profileOf } from '@/server/game/profiles';
 import { hashBrowserCredential, issueBrowserCredential } from '@/server/security/browser';
@@ -155,27 +154,7 @@ export class GameService {
     if (!row) {
       return { session: null };
     }
-    return { session: this.project(this.sealDefeat(row)) };
-  }
-
-  private sealDefeat(row: SessionRow): SessionRow {
-    if (row.status !== 'active') return row;
-    const state = this.repo.parseState(row);
-    if (!anyDown(state)) return row;
-    const next = defeatParty(state);
-    const updatedAt = this.nowIso();
-    const wrote = this.repo.casUpdateSession({
-      id: row.id,
-      expectedRevision: row.revision,
-      expectedPending: row.pending_operation_id,
-      revision: row.revision + 1,
-      status: next.status,
-      state_json: JSON.stringify(next),
-      pending_operation_id: null,
-      updated_at: updatedAt,
-    });
-    if (!wrote) return row;
-    return this.repo.getSessionById(row.id) ?? row;
+    return { session: this.project(row) };
   }
 
   createSession(
@@ -288,11 +267,7 @@ export class GameService {
     if (row.status !== 'active') {
       throw new GameServiceError('SESSION_ENDED', locale, { currentRevision: row.revision });
     }
-    const sealed = this.sealDefeat(row);
-    if (sealed.status !== 'active') {
-      throw new GameServiceError('SESSION_ENDED', locale, { currentRevision: sealed.revision });
-    }
-    const state = this.repo.parseState(sealed);
+    const state = this.repo.parseState(row);
     if (command.expectedRevision !== row.revision) {
       throw new GameServiceError('STALE_REVISION', locale, { currentRevision: row.revision });
     }
@@ -641,6 +616,7 @@ export class GameService {
     const plan = this.makePlan(command, result, false, {
       kind: interpretation.kind,
       note: resolutionNote(interpretation),
+      toll: interpretation.kind === 'check' ? (interpretation.toll ?? 'none') : 'none',
     });
     this.savePlan(op, plan, 'narrating');
     return this.finishFromResolution(owner, operationId);
@@ -774,14 +750,19 @@ export class GameService {
         return null;
       }
       let nextState = structuredClone(plan.nextState);
+      const beforeState = this.repo.parseState(row);
       const paragraphs =
         narration?.paragraphs ?? plan.localParagraphs;
+      let notedHarms: Array<{ playerId: string; hp: number; mp: number; cause: string | null }> = [];
       if (narration) {
-        if (narration.prompt) {
-          nextState.currentPrompt = narration.prompt;
-        }
         if (narration.suggestions.length > 0 && nextState.status === 'active') {
-          nextState.suggestions = narration.suggestions;
+          nextState.suggestions = orderSuggestionsForSeat(pack, nextState, narration.suggestions);
+        }
+        if (narration.prompt && nextState.status === 'active') {
+          const job = seatJob(pack, nextState);
+          nextState.currentPrompt = job && !narration.prompt.startsWith(job)
+            ? `${job} ${narration.prompt}`
+            : narration.prompt;
         }
         if (narration.journalFact) {
           const allowed = new Set(nextState.revealedFactIds);
@@ -802,20 +783,42 @@ export class GameService {
             });
           }
         }
-        for (const harm of storyHarm({
+        const beforeActor = beforeState.party.find((entry) => entry.playerId === plan.actorId);
+        const actorNow = nextState.party.find((entry) => entry.playerId === plan.actorId);
+        const mechanicalHp =
+          beforeActor && actorNow ? Math.max(0, beforeActor.hp - actorNow.hp) : 0;
+        const tollMp = previewToll(plan.toll ?? 'none', beforeActor?.mp ?? 0).tollMp;
+        notedHarms = storyHarm({
           paragraphs: narration.paragraphs,
           party: nextState.party,
           proposed: narration.harms,
-        })) {
+        });
+        for (const harm of notedHarms) {
           const member = nextState.party.find((entry) => entry.playerId === harm.playerId);
           if (!member) continue;
-          member.hp = Math.max(0, member.hp - harm.hp);
-          member.mp = Math.max(0, member.mp - harm.mp);
+          const onActor = harm.playerId === plan.actorId;
+          member.hp = Math.max(0, member.hp - (onActor ? extraAfterToll(harm.hp, mechanicalHp) : harm.hp));
+          member.mp = Math.max(0, member.mp - (onActor ? extraAfterToll(harm.mp, tollMp) : harm.mp));
+          if (onActor) {
+            // The line shows the higher of the check toll and the prose wound. The meter already holds the toll.
+            harm.hp = Math.max(harm.hp, mechanicalHp);
+            harm.mp = Math.max(harm.mp, tollMp);
+          }
+          if (harm.hp > 0) {
+            member.lastWoundHp = Math.min(6, harm.hp);
+          }
         }
-        if (anyDown(nextState)) {
-          nextState = defeatParty(nextState);
+        if (allDown(nextState) && nextState.status === 'active') {
+          const moved = nextState.scene.index !== beforeState.scene.index;
+          if (moved) {
+            for (const member of nextState.party) {
+              if (member.hp <= 0) member.hp = 1;
+            }
+          } else {
+            nextState = recoverWipe(nextState, pack);
+          }
         }
-        if (nextState.ending && narration.ending && !anyDown(nextState)) {
+        if (nextState.ending && narration.ending) {
           const playerIds = new Set(nextState.party.map((member) => member.playerId));
           if (
             narration.ending.epilogues.length !== nextState.party.length ||
@@ -867,13 +870,7 @@ export class GameService {
         payload_json: JSON.stringify({
           paragraphs,
           quote: narration?.quote ?? null,
-          harms: narration
-            ? storyHarm({
-                paragraphs: narration.paragraphs,
-                party: nextState.party,
-                proposed: narration.harms,
-              })
-            : [],
+          harms: notedHarms,
         }),
         created_at: timestamp,
       });
@@ -942,7 +939,9 @@ export class GameService {
             ? 'narrate.item'
             : command.kind === 'rest'
               ? 'narrate.rest'
-              : 'narrate.automatic';
+              : command.kind === 'cover'
+                ? 'narrate.cover'
+                : 'narrate.automatic';
     const resolutionKind =
       resolution?.kind ?? (command.kind === 'ask' ? 'question' : null);
     const narratesWithoutCheck =
@@ -1083,6 +1082,13 @@ export class GameService {
     }
     if (command.kind === 'rest') {
       return { kind: 'rest', actorId: command.actorId };
+    }
+    if (command.kind === 'cover') {
+      return {
+        kind: 'cover',
+        actorId: command.actorId,
+        targetPlayerId: command.targetPlayerId,
+      };
     }
     return { kind: 'automatic', actorId: command.actorId };
   }

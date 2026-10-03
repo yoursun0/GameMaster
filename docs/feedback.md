@@ -23,3 +23,12 @@
 10. unclear what is the use of 向主持人提問 function
 
 11. HP deduction are random and not really relate to the story sometimes
+
+12. The interaction among the multi-players are weak. 1-player game vs 4-player game is moving in similar manner, not really getting much different experience
+
+13. The story plot is not exciting, it is a boring plot and the NPC does not have strong character.
+
+14. The dialogues should be emphasize with differet font color and font size. Maybe the game engine can define the character and NPC characteristics in a stronger consistency and not let Deepseek free flow too much. Game system can provide some dialogue sample per character.
+
+15. In the front page, the 4 main character selection dropdown should not have the name, the default name should change when i change the character image, the image should control the character. maybe we can choose the character (among the 4 fixed options), then each character has a sub-set of faces to choose. so we won't choose a female character with a male face.
+

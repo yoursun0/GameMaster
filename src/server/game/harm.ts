@@ -2,7 +2,13 @@ export type StoryHarm = {
   playerId: string;
   hp: number;
   mp: number;
+  cause: string | null;
 };
+
+/** Extra HP or MP to apply after the check toll is already on the actor. */
+export function extraAfterToll(prose: number, already: number): number {
+  return Math.max(0, prose - Math.max(0, already));
+}
 
 const HEAVY = ['燙', '燎', '灼', '燒焦', '血', '流血', '傷口', '刀傷', '刺傷', '砍傷', '骨折', 'burn', 'blood', 'bleed', 'wound', 'gash', 'stab'];
 const LIGHT = ['痛', '疼', '擦破', '口子', '青腫', '磕破', 'bruise', 'scrape', 'hurt'];
@@ -20,22 +26,32 @@ export function storyHarm(input: {
     const hp = clamp(Math.max(fromText.hp, proposed?.hp ?? 0), 0, 3);
     const mp = clamp(Math.max(fromText.mp, proposed?.mp ?? 0), 0, 2);
     if (hp > 0 || mp > 0) {
-      found.set(member.playerId, { playerId: member.playerId, hp, mp });
+      found.set(member.playerId, {
+        playerId: member.playerId,
+        hp,
+        mp,
+        cause: fromText.cause,
+      });
     }
   }
   return [...found.values()];
 }
 
-function harmInText(text: string, name: string): { hp: number; mp: number } {
+function harmInText(text: string, name: string): { hp: number; mp: number; cause: string | null } {
   let hp = 0;
   let mp = 0;
+  let cause: string | null = null;
   for (const sentence of sentences(text)) {
     if (!mentions(sentence, name)) continue;
-    if (HEAVY.some((mark) => sentence.toLowerCase().includes(mark))) hp = Math.max(hp, 2);
-    else if (LIGHT.some((mark) => sentence.toLowerCase().includes(mark))) hp = Math.max(hp, 1);
-    if (FOCUS.some((mark) => sentence.includes(mark))) mp = Math.max(mp, 1);
+    const heavy = HEAVY.some((mark) => sentence.toLowerCase().includes(mark));
+    const light = LIGHT.some((mark) => sentence.toLowerCase().includes(mark));
+    const focus = FOCUS.some((mark) => sentence.includes(mark));
+    if (heavy) hp = Math.max(hp, 2);
+    else if (light) hp = Math.max(hp, 1);
+    if (focus) mp = Math.max(mp, 1);
+    if ((heavy || light || focus) && !cause) cause = sentence.replace(/[。！？!?；;]+$/u, '');
   }
-  return { hp, mp };
+  return { hp, mp, cause };
 }
 
 function sentences(text: string): string[] {

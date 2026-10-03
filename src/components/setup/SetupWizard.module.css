@@ -149,6 +149,32 @@
   cursor: not-allowed;
 }
 
+.roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.role,
+.roleOn {
+  font: inherit;
+  cursor: pointer;
+  color: #f3e6c4;
+  background: rgba(18, 14, 10, 0.72);
+  border: 1px solid #8d6a34;
+  padding: 8px 10px;
+}
+
+.roleOn {
+  border-color: #f0d7a2;
+  background: rgba(74, 56, 32, 0.9);
+}
+
+.role:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 @media (max-width: 860px) {
   .seats {
     grid-template-columns: 1fr;

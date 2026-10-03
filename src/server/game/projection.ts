@@ -2,8 +2,9 @@ import 'server-only';
 
 import type { WorldPack } from '@/server/content/types';
 import { ABILITY_COST, PROFILE_STATS, characterOf } from '@/server/game/profiles';
+import { SCENE_PLATE } from '@/server/ai/images';
 import { currentScene, sceneThresholds } from '@/server/game/scenes';
-import { sessionStateSchema, type SessionState } from '@/server/game/schemas';
+import { REST_USED_FLAG, sessionStateSchema, type SessionState } from '@/server/game/schemas';
 import type { OperationRow, MessageRow, SessionRow } from '@/server/db/repository';
 import type { Attribute, ConditionId, Locale, Profile } from '@/shared/schemas';
 
@@ -64,7 +65,13 @@ export type SessionDTO = {
     maxHp: number;
     maxMp: number;
     conditions: Array<{ id: ConditionId }>;
-    ability: { id: string; name: string; description: string; cost: number };
+    ability: {
+      id: string;
+      name: string;
+      description: string;
+      cost: number;
+      attribute: Attribute;
+    };
     active: boolean;
     overwhelmed: boolean;
   }>;
@@ -86,6 +93,8 @@ export type SessionDTO = {
     progressTarget: number;
     threatLimit: number;
     closingReason: SessionState['scene']['closingReason'];
+    canRest: boolean;
+    plate: string;
   };
   objective: { text: string };
   inventory: Array<{
@@ -160,6 +169,7 @@ export function projectSession(args: {
           name: character.ability.name[locale],
           description: character.ability.description[locale],
           cost: ABILITY_COST,
+          attribute: stats.abilityAttribute,
         },
         active: member.seat === state.turn.activeSeat,
         overwhelmed: member.hp === 0,
@@ -187,6 +197,8 @@ export function projectSession(args: {
       progressTarget: thresholds.progressTarget,
       threatLimit: thresholds.threatLimit,
       closingReason: state.scene.closingReason,
+      canRest: scene.restAllowed && !state.flags.includes(REST_USED_FLAG),
+      plate: SCENE_PLATE,
     },
     objective: { text: scene.objective[locale] },
     inventory: state.inventory.map((entry) => {

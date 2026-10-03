@@ -8,6 +8,7 @@ const base: AppEnv = {
   DEEPSEEK_BASE_URL: 'https://api.deepseek.com',
   DEEPSEEK_MODEL: 'deepseek-flash',
   DEEPSEEK_API_KEY: undefined,
+  IMAGE_API_KEY: undefined,
   AI_MODE: 'deepseek',
 };
 

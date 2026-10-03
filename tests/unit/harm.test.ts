@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { storyHarm } from '@/server/game/harm';
+import { extraAfterToll, storyHarm } from '@/server/game/harm';
 
 const party = [
   { playerId: 'jon', displayName: 'JON SNOW' },
@@ -15,7 +15,14 @@ describe('story harm', () => {
       ],
       party,
     });
-    expect(harms).toEqual([{ playerId: 'jon', hp: 2, mp: 0 }]);
+    expect(harms).toEqual([
+      {
+        playerId: 'jon',
+        hp: 2,
+        mp: 0,
+        cause: 'JON SNOW 的袖口被火燎焦了一塊，手背燙出一片紅',
+      },
+    ]);
   });
 
   test('the system still charges a wound when the model reports none', () => {
@@ -24,7 +31,14 @@ describe('story harm', () => {
       party,
       proposed: [{ playerId: 'dany', hp: 0, mp: 0 }],
     });
-    expect(harms).toEqual([{ playerId: 'dany', hp: 2, mp: 0 }]);
+    expect(harms).toEqual([
+      {
+        playerId: 'dany',
+        hp: 2,
+        mp: 0,
+        cause: '龍媽指節上蹭破了一道口子，血混著蠟屑黏在紙上',
+      },
+    ]);
   });
 
   test('keeps a model harm even when the wording is quieter than the marks', () => {
@@ -33,6 +47,12 @@ describe('story harm', () => {
       party,
       proposed: [{ playerId: 'jon', hp: 2, mp: 0 }],
     });
-    expect(harms).toEqual([{ playerId: 'jon', hp: 2, mp: 0 }]);
+    expect(harms).toEqual([{ playerId: 'jon', hp: 2, mp: 0, cause: null }]);
+  });
+
+  test('the actor keeps the higher of the check toll and the prose wound', () => {
+    expect(extraAfterToll(2, 2)).toBe(0);
+    expect(extraAfterToll(2, 1)).toBe(1);
+    expect(extraAfterToll(0, 2)).toBe(0);
   });
 });

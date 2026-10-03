@@ -22,6 +22,8 @@ const envSchema = z.object({
   DEEPSEEK_MODEL: z.string().min(1).default('deepseek-flash'),
   DEEPSEEK_API_KEY: optionalSecret,
   AI_MODE: aiModeSchema.default('deepseek'),
+  IMAGE_API_URL: z.url().optional(),
+  IMAGE_API_KEY: optionalSecret,
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

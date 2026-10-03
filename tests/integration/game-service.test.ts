@@ -96,7 +96,7 @@ describe('session ownership', () => {
     ]);
   });
 
-  test('reading an active session seals a fallen player as a loss', async () => {
+  test('a downed player stays in the active session', async () => {
     const { db, game } = service();
     const owner = game.issueOwner();
     const created = game.createSession(owner, createBody());
@@ -110,24 +110,19 @@ describe('session ownership', () => {
       created.session.sessionId,
     );
     const loaded = game.getSession(owner).session;
-    expect(loaded?.status).toBe('completed');
-    expect(loaded?.ending?.kind).toBe('failure');
-    expect(loaded?.ending?.summary).toBe('P1 has fallen. You are lost.');
-    expect(loaded?.ending?.epilogues).toEqual([]);
+    expect(loaded?.status).toBe('active');
+    expect(loaded?.ending).toBeNull();
     expect(loaded?.party[0].hp).toBe(0);
-    expect(loaded?.party[1].hp).toBeGreaterThan(0);
-    expect(loaded?.revision).toBe(row.revision + 1);
-    expect(loaded?.scene.index).toBe(0);
-    const again = game.getSession(owner).session;
-    expect(again?.revision).toBe(loaded?.revision);
-    await expect(
-      game.submitAction(owner, {
-        operationId: randomUUID(),
-        expectedRevision: loaded!.revision,
-        actorId: loaded!.party[0].playerId,
-        kind: 'pass',
-      }),
-    ).rejects.toMatchObject({ code: 'SESSION_ENDED' });
+    expect(loaded?.party[0].overwhelmed).toBe(true);
+    expect(loaded?.revision).toBe(row.revision);
+    const passed = await game.submitAction(owner, {
+      operationId: randomUUID(),
+      expectedRevision: loaded!.revision,
+      actorId: loaded!.party[0].playerId,
+      kind: 'pass',
+    });
+    expect(passed.session.status).toBe('active');
+    expect(passed.session.party[0].hp).toBe(0);
   });
 
   test('two owners cannot read each other\'s operations', async () => {
@@ -352,7 +347,7 @@ describe('operations and fencing', () => {
         narrate: (context) =>
           assertNarration(
             {
-              paragraphs: ['The door holds. The yard is the way out.'],
+              paragraphs: ['The door holds. Tavi shouts 「Bar it.」 The yard is the way out.'],
               quote: null,
               prompt: 'One breath before you run.',
               suggestions: [

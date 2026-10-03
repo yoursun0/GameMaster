@@ -152,7 +152,7 @@ describe('DeepSeek adapter', () => {
 
   test('parses a valid narration', async () => {
     const narration = {
-      paragraphs: ['The seal catches the lamplight.'],
+      paragraphs: ['The seal catches the lamplight. Lya says 「Look.」 Kaen answers 「Hold.」'],
       quote: null,
       prompt: 'What do you do next?',
       suggestions: [

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { faceForPlayer, readFaceMap } from '@/lib/portraits';
@@ -26,7 +27,8 @@ type PartyMember = {
   maxHp: number;
   maxMp: number;
   active: boolean;
-  ability: { name: string; cost: number };
+  ability: { name: string; cost: number; attribute: string };
+  overwhelmed: boolean;
 };
 
 type Session = {
@@ -47,9 +49,11 @@ type Session = {
     threat: number;
     progressTarget: number;
     threatLimit: number;
+    canRest: boolean;
+    plate: string;
   };
   objective: { text: string };
-  inventory: Array<{ itemId: string; name: string; quantity: number }>;
+  inventory: Array<{ itemId: string; name: string; description: string; quantity: number; usable: boolean }>;
   suggestions: Array<{ text: string; approachId: string | null }>;
   recentMessages: Message[];
   pendingOperation: {
@@ -79,9 +83,9 @@ export function GameShell() {
   const [session, setSession] = useState<Session | null>(null);
   const [faceMap, setFaceMap] = useState<Record<string, string>>({});
   const [text, setText] = useState('');
-  const [useAbility, setUseAbility] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const locale: Locale = session?.locale ?? 'zh-Hant';
   const t = (key: Parameters<typeof uiString>[1], vars?: Record<string, string>) =>
     uiString(locale, key, vars);
@@ -119,36 +123,29 @@ export function GameShell() {
     return () => window.clearInterval(timer);
   }, [session?.pendingOperation]);
 
-  async function send(kind: 'act' | 'ask' | 'pass') {
+  async function commit(body: Record<string, unknown>) {
     if (!session) return;
     setBusy(true);
     setError(null);
     try {
-      const body =
-        kind === 'pass'
-          ? {
-              operationId: crypto.randomUUID(),
-              expectedRevision: session.revision,
-              actorId: session.turn.activePlayerId,
-              kind,
-            }
-          : {
-              operationId: crypto.randomUUID(),
-              expectedRevision: session.revision,
-              actorId: session.turn.activePlayerId,
-              kind,
-              text,
-              ...(kind === 'act' ? { useAbility } : {}),
-            };
-      const result = await api<ActionResponse>('/api/actions', {
+      let result = await api<ActionResponse>('/api/actions', {
         method: 'POST',
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          operationId: crypto.randomUUID(),
+          expectedRevision: session.revision,
+          actorId: session.turn.activePlayerId,
+          ...body,
+        }),
       });
-      setSession(result.session);
-      if (kind !== 'act' || result.session.pendingOperation?.phase !== 'awaiting_confirmation') {
-        setText('');
-        setUseAbility(false);
+      const pending = result.session.pendingOperation;
+      if (pending?.phase === 'awaiting_confirmation') {
+        result = await api<ActionResponse>(`/api/actions/${pending.id}/confirm`, {
+          method: 'POST',
+          body: JSON.stringify({ expectedRevision: result.session.revision }),
+        });
       }
+      setSession(result.session);
+      setText('');
     } catch (caught) {
       setError((caught as Error).message);
     } finally {
@@ -169,10 +166,7 @@ export function GameShell() {
         },
       );
       setSession(result.session);
-      if (path !== 'cancel') {
-        setText('');
-        setUseAbility(false);
-      }
+      if (path !== 'cancel') setText('');
     } catch (caught) {
       setError((caught as Error).message);
     } finally {
@@ -185,12 +179,16 @@ export function GameShell() {
   }
 
   const active = session.party.find((member) => member.playerId === session.turn.activePlayerId);
-  const preview = session.pendingOperation?.preview;
-  const awaiting = session.pendingOperation?.phase === 'awaiting_confirmation';
-  const lost = session.party.some((member) => member.hp <= 0);
+  const retrying = Boolean(session.pendingOperation?.canRetry);
+  const writing = Boolean(
+    session.pendingOperation &&
+      ['interpreting', 'resolving', 'narrating', 'awaiting_confirmation'].includes(
+        session.pendingOperation.phase,
+      ),
+  );
 
   return (
-    <div className={styles.shell} data-testid="stage">
+    <div className={sheetOpen ? `${styles.shell} ${styles.sheetOpen}` : styles.shell} data-testid="stage">
       <header className={styles.top}>
         <h1 className={styles.plaque}>{session.world.title}</h1>
         <div className={styles.topMeta}>
@@ -220,7 +218,10 @@ export function GameShell() {
             </div>
             <div className={styles.meta}>
               <h2>{member.displayName}</h2>
-              <p className={styles.role}>{member.role}</p>
+              <p className={styles.role}>
+                {member.role}
+                {member.overwhelmed ? ` · ${t('ui.downed')}` : ''}
+              </p>
               <Meter label="HP" value={member.hp} max={member.maxHp} kind="hp" />
               <Meter label="MP" value={member.mp} max={member.maxMp} kind="mp" />
             </div>
@@ -232,6 +233,15 @@ export function GameShell() {
           <p className={styles.place}>
             {session.scene.location} · {session.scene.title}
           </p>
+          <div className={styles.plateFrame}>
+            <Image
+              className={styles.plate}
+              src={session.scene.plate}
+              alt=""
+              fill
+              sizes="(max-width: 980px) 100vw, 720px"
+            />
+          </div>
           {session.recentMessages.map((message) => (
             <MessageBlock
               key={message.id}
@@ -241,15 +251,7 @@ export function GameShell() {
               t={t}
             />
           ))}
-          {lost ? (
-            <section className={`${styles.ending} ${styles.lost}`}>
-              <h2>{t('ui.lost')}</h2>
-              <p>{session.ending?.summary ?? t('ui.lostDetail')}</p>
-              <button type="button" onClick={() => router.push('/')}>
-                {t('ui.backToLobby')}
-              </button>
-            </section>
-          ) : session.ending ? (
+          {session.ending ? (
             <section className={styles.ending}>
               <h2>
                 {t('ui.ending')}: {session.ending.kind}
@@ -272,7 +274,7 @@ export function GameShell() {
             <p>{session.objective.text}</p>
             <div className={styles.meters}>
               <span>
-                {session.scene.progress}/{session.scene.progressTarget}
+                {t('ui.progress')} {session.scene.progress}/{session.scene.progressTarget}
               </span>
               <Pips
                 value={session.scene.progress}
@@ -280,10 +282,11 @@ export function GameShell() {
                 kind="progress"
               />
               <span>
-                {session.scene.threat}/{session.scene.threatLimit}
+                {t('ui.threat')} {session.scene.threat}/{session.scene.threatLimit}
               </span>
               <Pips value={session.scene.threat} max={session.scene.threatLimit} kind="threat" />
             </div>
+            <p className={styles.hint}>{t('ui.metersHint')}</p>
           </div>
         </section>
         <section className={styles.panel}>
@@ -292,119 +295,153 @@ export function GameShell() {
             {session.inventory.map((item) => (
               <li key={`${item.itemId}-${item.name}`}>
                 <ItemGlyph itemId={item.itemId} />
-                <span>{item.name}</span>
+                <span>
+                  {item.name}
+                  {item.usable ? ` · ${item.description}` : ''}
+                </span>
                 <span className={styles.qty}>× {item.quantity}</span>
+                {item.usable
+                  ? session.party.map((member) => (
+                      <button
+                        key={member.playerId}
+                        type="button"
+                        className={styles.itemButton}
+                        disabled={busy || (member.hp <= 0 && !item.itemId.includes('restor'))}
+                        onClick={() =>
+                          void commit({
+                            kind: 'use_item',
+                            itemId: item.itemId,
+                            targetPlayerId: member.playerId,
+                          })
+                        }
+                      >
+                        {t('ui.useOn', { name: member.displayName })}
+                      </button>
+                    ))
+                  : null}
               </li>
             ))}
           </ul>
         </section>
       </aside>
-      {session.status === 'active' && !lost ? (
+      {session.status === 'active' && !session.ending ? (
         <footer className={styles.composer}>
-          {preview ? (
-            <div className={styles.preview}>
-              <h3>{t('ui.preview')}</h3>
-              <p className={styles.actionText}>{preview.actionText}</p>
-              <p>
-                {preview.attribute} DC {preview.target}
-                {preview.mpCost ? ` · MP ${preview.mpCost}` : ''}
-              </p>
-              {preview.tollHp || preview.tollMp ? (
-                <p>
-                  {t('ui.toll', {
-                    hp: String(preview.tollHp ?? 0),
-                    mp: String(preview.tollMp ?? 0),
-                  })}
-                </p>
-              ) : null}
-              <p>{preview.stakes.success}</p>
-              <p>{preview.stakes.partial}</p>
-              <p>{preview.stakes.failure}</p>
-              <div className={styles.previewActions}>
-                {awaiting ? (
-                  <button type="button" className={styles.act} disabled={busy} onClick={() => void confirm('confirm')}>
-                    {t('ui.confirm')}
-                  </button>
-                ) : null}
-                {session.pendingOperation?.canCancel && awaiting ? (
-                  <button type="button" className={styles.ghost} disabled={busy} onClick={() => void confirm('cancel')}>
-                    {t('ui.cancel')}
-                  </button>
-                ) : null}
-                {session.pendingOperation?.canRetry ? (
-                  <button type="button" className={styles.ghost} disabled={busy} onClick={() => void confirm('retry')}>
-                    {t('ui.retry')}
-                  </button>
-                ) : null}
-              </div>
-              {session.pendingOperation?.errorCode ? (
-                <p className={styles.warn}>
-                  {pendingErrorText(session.pendingOperation.errorCode, t)}
-                </p>
-              ) : null}
-            </div>
-          ) : (
-            <>
-              <div className={styles.sideCol}>
-                <div className={styles.approaches}>
-                  <p>{t('ui.approaches')}</p>
-                  {session.suggestions.map((suggestion) => (
+          {writing ? <p className={styles.hint}>{t('ui.writing')}</p> : null}
+          <div className={styles.sideCol}>
+            <div className={styles.approaches}>
+              <p>{t('ui.approaches')}</p>
+              {session.suggestions.map((suggestion) => {
+                const attribute = suggestion.approachId?.split('-').at(-1);
+                const abilityFits =
+                  Boolean(active) &&
+                  attribute === active?.ability.attribute &&
+                  (active?.mp ?? 0) >= (active?.ability.cost ?? 2) &&
+                  !active?.overwhelmed;
+                return (
+                  <span key={suggestion.text} className={styles.approachRow}>
                     <button
-                      key={suggestion.text}
                       type="button"
-                      onClick={() => setText(suggestion.text)}
+                      disabled={busy || !suggestion.text}
+                      onClick={() => void commit({ kind: 'act', text: suggestion.text, useAbility: false })}
                     >
                       {suggestion.text}
                     </button>
-                  ))}
-                </div>
+                    {abilityFits && active ? (
+                      <button
+                        type="button"
+                        className={styles.ability}
+                        disabled={busy}
+                        onClick={() =>
+                          void commit({ kind: 'act', text: suggestion.text, useAbility: true })
+                        }
+                      >
+                        {t('ui.abilityChip', {
+                          name: active.ability.name,
+                          cost: String(active.ability.cost),
+                        })}
+                      </button>
+                    ) : null}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+          <div className={styles.entry}>
+            <p className={styles.turn}>{t('ui.turn', { name: active?.displayName ?? '' })}</p>
+            <textarea
+              value={text}
+              maxLength={600}
+              onChange={(event) => setText(event.target.value)}
+              placeholder={t('ui.composerHint')}
+            />
+          </div>
+          <div className={styles.commands}>
+            <button
+              type="button"
+              className={styles.act}
+              disabled={busy || !text.trim()}
+              onClick={() => void commit({ kind: 'act', text, useAbility: false })}
+            >
+              {t('ui.act')}
+            </button>
+            <button
+              type="button"
+              className={styles.ghost}
+              disabled={busy || !text.trim()}
+              onClick={() => void commit({ kind: 'ask', text })}
+            >
+              {t('ui.ask')}
+            </button>
+            <p className={styles.hint}>{t('ui.askHint')}</p>
+            <button type="button" className={styles.ghost} disabled={busy} onClick={() => void commit({ kind: 'pass' })}>
+              {t('ui.pass')}
+            </button>
+            {session.scene.canRest ? (
+              <button type="button" className={styles.act} disabled={busy} onClick={() => void commit({ kind: 'rest' })}>
+                {t('ui.rest')}
+                <span className={styles.hint}> {t('ui.restDetail')}</span>
+              </button>
+            ) : null}
+            {session.party.length > 1
+              ? session.party
+                  .filter((member) => member.playerId !== active?.playerId)
+                  .map((member) => (
+                    <button
+                      key={member.playerId}
+                      type="button"
+                      className={styles.ghost}
+                      disabled={busy || Boolean(active?.overwhelmed)}
+                      onClick={() => void commit({ kind: 'cover', targetPlayerId: member.playerId })}
+                    >
+                      {t('ui.cover', { name: member.displayName })}
+                    </button>
+                  ))
+              : null}
+            {session.party
+              .filter((member) => member.playerId !== active?.playerId && member.hp <= 0)
+              .map((member) => (
                 <button
-                  type="button"
-                  className={useAbility ? styles.abilityOn : styles.ability}
-                  aria-pressed={useAbility}
-                  onClick={() => setUseAbility((value) => !value)}
-                >
-                  {t('ui.ability')}
-                  {active ? ` · ${active.ability.name} (${active.ability.cost} MP)` : ''}
-                </button>
-              </div>
-              <div className={styles.entry}>
-                <p className={styles.turn}>{t('ui.turn', { name: active?.displayName ?? '' })}</p>
-                <textarea
-                  value={text}
-                  maxLength={600}
-                  onChange={(event) => setText(event.target.value)}
-                  placeholder={t('ui.composerHint')}
-                />
-              </div>
-              <div className={styles.commands}>
-                <button
+                  key={`help-${member.playerId}`}
                   type="button"
                   className={styles.act}
-                  disabled={busy || !text.trim()}
-                  onClick={() => void send('act')}
+                  disabled={busy || Boolean(active?.overwhelmed)}
+                  onClick={() => void commit({ kind: 'help', targetPlayerId: member.playerId })}
                 >
-                  {t('ui.act')}
+                  {t('ui.help', { name: member.displayName })}
                 </button>
-                <button
-                  type="button"
-                  className={styles.ghost}
-                  disabled={busy || !text.trim()}
-                  onClick={() => void send('ask')}
-                >
-                  {t('ui.ask')}
-                </button>
-                <button type="button" className={styles.ghost} disabled={busy} onClick={() => void send('pass')}>
-                  {t('ui.pass')}
-                </button>
-                {session.pendingOperation?.canRetry ? (
-                  <button type="button" className={styles.ghost} disabled={busy} onClick={() => void confirm('retry')}>
-                    {t('ui.retry')}
-                  </button>
-                ) : null}
-              </div>
-            </>
-          )}
+              ))}
+            <button type="button" className={styles.ghost} onClick={() => setSheetOpen((open) => !open)}>
+              {t('ui.sheet')}
+            </button>
+            {retrying ? (
+              <button type="button" className={styles.ghost} disabled={busy} onClick={() => void confirm('retry')}>
+                {t('ui.retry')}
+              </button>
+            ) : null}
+          </div>
+          {session.pendingOperation?.errorCode ? (
+            <p className={styles.warn}>{pendingErrorText(session.pendingOperation.errorCode, t)}</p>
+          ) : null}
           {error ? <p className={styles.warn}>{error}</p> : null}
         </footer>
       ) : null}
@@ -495,13 +532,14 @@ function HarmNotes({
   if (!Array.isArray(payload.harms)) return null;
   const lines = payload.harms.flatMap((entry) => {
     if (!entry || typeof entry !== 'object') return [];
-    const harm = entry as { playerId?: unknown; hp?: unknown; mp?: unknown };
+    const harm = entry as { playerId?: unknown; hp?: unknown; mp?: unknown; cause?: unknown };
     const name = party.find((member) => member.playerId === harm.playerId)?.displayName;
     const hp = typeof harm.hp === 'number' ? harm.hp : 0;
     const mp = typeof harm.mp === 'number' ? harm.mp : 0;
     if (!name || (hp <= 0 && mp <= 0)) return [];
     const key = hp > 0 && mp > 0 ? 'ui.harmBoth' : hp > 0 ? 'ui.harmHp' : 'ui.harmMp';
-    return [t(key, { name, hp: String(hp), mp: String(mp) })];
+    const cause = typeof harm.cause === 'string' && harm.cause ? ` — 「${harm.cause}」` : '';
+    return [`${t(key, { name, hp: String(hp), mp: String(mp) })}${cause}`];
   });
   if (lines.length === 0) return null;
   return (
@@ -523,6 +561,41 @@ function outcomeLabel(
   return outcome;
 }
 
+function StoryParagraph({
+  text,
+  party,
+}: {
+  text: string;
+  party: Array<{ displayName: string }>;
+}) {
+  const names = [
+    ...party.map((member) => member.displayName),
+    '塔維',
+    '奧倫',
+    '梅菈',
+    '薇絲珀',
+    'Tavi',
+    'Orren',
+    'Maera',
+    'Vesper',
+  ];
+  const speaker = names.findIndex((name) => name.length > 0 && text.includes(name));
+  const parts = text.split(/(「[^」]*」)/u);
+  return (
+    <p>
+      {parts.map((part, index) =>
+        part.startsWith('「') ? (
+          <span key={index} className={styles.speech} data-speaker={String(Math.max(speaker, 0) % 7)}>
+            {part}
+          </span>
+        ) : (
+          <span key={index}>{part}</span>
+        ),
+      )}
+    </p>
+  );
+}
+
 function MessageBlock({
   message,
   party,
@@ -540,7 +613,13 @@ function MessageBlock({
     return (
       <div className={styles.gm}>
         {Array.isArray(paragraphs)
-          ? paragraphs.map((paragraph) => <p key={String(paragraph)}>{String(paragraph)}</p>)
+          ? paragraphs.map((paragraph) => (
+              <StoryParagraph
+                key={String(paragraph)}
+                text={String(paragraph)}
+                party={party}
+              />
+            ))
           : null}
         <HarmNotes payload={payload} party={party} t={t} />
       </div>

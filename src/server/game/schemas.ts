@@ -21,6 +21,7 @@ export const characterStateSchema = z
     characterId: z.string().min(1),
     hp: z.number().int().nonnegative(),
     mp: z.number().int().nonnegative(),
+    lastWoundHp: z.number().int().min(0).max(6).optional(),
     conditions: z.array(characterConditionSchema),
   })
   .strict();
@@ -147,7 +148,8 @@ export type EngineAction =
   | { kind: 'pass'; actorId: string }
   | { kind: 'help'; actorId: string; targetPlayerId: string }
   | { kind: 'use_item'; actorId: string; itemId: string; targetPlayerId: string }
-  | { kind: 'rest'; actorId: string };
+  | { kind: 'rest'; actorId: string }
+  | { kind: 'cover'; actorId: string; targetPlayerId: string };
 
 export type CheckBreakdown = {
   actorId: string;

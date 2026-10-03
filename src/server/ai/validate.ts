@@ -87,5 +87,28 @@ export function assertNarration(
   if (Array.from(narration.paragraphs.join('')).length > 2800) {
     throw new ProviderError('AI_INVALID_OUTPUT', 'Narration paragraphs exceed 2800 code points');
   }
+  const beat = spokenBeatProblem(narration.paragraphs, context.locale, qa || Boolean(context.endingKind));
+  if (beat) {
+    throw new ProviderError('AI_INVALID_OUTPUT', beat);
+  }
   return narration;
+}
+
+export function spokenBeatProblem(
+  paragraphs: string[],
+  locale: 'en' | 'zh-Hant',
+  skip: boolean,
+): string | null {
+  if (skip) return null;
+  const text = paragraphs.join('');
+  if (!/「[^」]{1,80}」/u.test(text)) {
+    return 'Narration needs a spoken line';
+  }
+  if (locale === 'zh-Hant' && Array.from(text).length > 350) {
+    return 'Narration is too long';
+  }
+  if (locale === 'en' && text.split(/\s+/).filter(Boolean).length > 180) {
+    return 'Narration is too long';
+  }
+  return null;
 }

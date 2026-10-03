@@ -158,6 +158,7 @@ export type NarrateContext = {
   resourceChanges?: Array<{ playerId: string; hp: number; mp: number }>;
   sceneTransition?: { nextId: string; opening: string } | null;
   endingKind?: string | null;
+  seatJob?: string;
   worldTone?: string;
   scene?: { id: string; title: string; description: string };
   party?: InterpretContext['party'];

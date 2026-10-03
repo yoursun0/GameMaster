@@ -37,6 +37,7 @@ export const en = {
   'narrate.help': '{name} steadies {target}.',
   'narrate.item': '{name} uses an item.',
   'narrate.rest': 'The party takes a short rest.',
+  'narrate.cover': '{name} covers {target}.',
   'narrate.automatic': '{name} follows through.',
   'ui.brand': 'Tales Beyond',
   'ui.language': 'Language',
@@ -75,6 +76,20 @@ export const en = {
   'ui.harmBoth': '{name} loses {hp} HP and {mp} MP',
   'ui.composerHint': 'Describe one action, or ask a question.',
   'ui.saved': 'Saved',
+  'ui.progress': 'Progress',
+  'ui.threat': 'Threat',
+  'ui.metersHint': 'Fill progress to win the room. Fill threat and you leave hurt. The story still moves.',
+  'ui.askHint': 'Does not spend the turn. Ask only about what is in front of you.',
+  'ui.rest': 'Rest',
+  'ui.restDetail': 'Party +3 HP and +2 MP.',
+  'ui.cover': 'Cover {name}',
+  'ui.help': 'Help {name}',
+  'ui.useOn': 'Use on {name}',
+  'ui.sheet': 'Goal and items',
+  'ui.abilityChip': '{name} · +3 · {cost} MP',
+  'ui.writing': 'The Game Master is writing…',
+  'ui.downed': 'Down',
+  'ui.rolePick': 'Choose a role',
 } as const;
 
 export type UiMessageKey = keyof typeof en;

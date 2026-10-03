@@ -62,11 +62,11 @@ const BEATS: Beat[] = [
     title: L('The Lance Road', '長槍大路'),
     location: L('Open causeway', '暴露的官道'),
     opening: L(
-      'The inn is smoke behind you. Riders lower their lances and come up the causeway. Talk will not stop a charge. Break through them and Crowkeep’s north gate is in sight, under the first evening bell.',
-      '客棧在你們身後只剩煙。騎兵放平長槍，沿官道衝來。說話擋不住衝鋒。衝破他們，鴉堡北門就在第一聲晚鐘之下。',
+      'The inn is smoke behind you. Vesper, the sellsword captain, lowers a lance and comes up the causeway for the letter. Talk will not stop this charge. Break through and Crowkeep’s north gate is in sight, under the first evening bell.',
+      '客棧在你們身後只剩煙。傭兵頭子薇絲珀放平長槍，為了那封信沿官道衝來。說話擋不住這次衝鋒。衝破他們，鴉堡北門就在第一聲晚鐘之下。',
     ),
     objective: L('Survive the charge and reach Crowkeep’s gate.', '活過這次衝鋒，抵達鴉堡城門。'),
-    prompt: L('Hooves are on you. How do you take the hit?', '馬蹄已經到了。你怎麼接這一擊？'),
+    prompt: L('Vesper’s hooves are on you. How do you take the hit?', '薇絲珀的馬蹄已經到了。你怎麼接這一擊？'),
     npc: 'ash-tavi',
     cleared: L(
       'The last rider goes past. Crowkeep’s north gate is ahead, and the evening bell is warming.',
@@ -87,8 +87,8 @@ const BEATS: Beat[] = [
     title: L('The Beating at the Gate', '城門的毆打'),
     location: L('North gate of Crowkeep', '鴉堡北門'),
     opening: L(
-      'Guards are beating travellers at the search while the evening bell starts. Tavi points at a drain that floods into the city. Fight the line or take the drain. When the bell finishes, this gate closes, and the only door beyond it is the Greywing archive.',
-      '晚鐘一響，守衛就在搜查處毆打旅人。塔維指向一條灌進城裡的排水溝。跟隊列打，或鑽進溝裡。鐘聲結束時這道門就關，門後唯一的路是灰翼檔案閣樓。',
+      'A frightened guard is beating travellers at the search while the evening bell starts. He will take one name and look away. Tavi points at a drain that floods into the city. Fight the line, buy the name, or take the drain. When the bell finishes, this gate closes, and the only door beyond it is the Greywing archive.',
+      '晚鐘一響，一名害怕的守衛正在搜查處毆打旅人。他只要一個名字就會別過臉。塔維指向一條灌進城裡的排水溝。跟隊列打、用名字買路，或鑽進溝裡。鐘聲結束時這道門就關，門後唯一的路是灰翼檔案閣樓。',
     ),
     objective: L('Get inside before the bell ends.', '在鐘聲結束前進城。'),
     prompt: L('A guard raises a cudgel. What do you do?', '一名守衛舉起短棍。你要怎麼做？'),
@@ -187,8 +187,8 @@ const BEATS: Beat[] = [
     title: L('The First Charge', '第一衝鋒'),
     location: L('Inner court gallery', '內廷長廊'),
     opening: L(
-      'Both houses charge. Raise the letter and join the attack, and the city will call this night a disclosure. Step between the blades and force a halt, and it will call it a negotiation. Either way the fight ends on the bell-tower stair.',
-      '兩大家族同時衝鋒。舉起信加入進攻，這一夜就叫揭發。站進刀鋒之間逼他們停下，這一夜就叫談判。無論哪一條，這一架都會在鐘樓樓梯上結束。',
+      'Both houses charge, and Vesper is in one of the lines still reaching for the letter. Raise the letter and join the attack, and the city will call this night a disclosure. Step between the blades and force a halt, and it will call it a negotiation. Either way the fight ends on the bell-tower stair.',
+      '兩大家族同時衝鋒，薇絲珀還在其中一邊伸手要那封信。舉起信加入進攻，這一夜就叫揭發。站進刀鋒之間逼他們停下，這一夜就叫談判。無論哪一條，這一架都會在鐘樓樓梯上結束。',
     ),
     objective: L(
       'Choose the charge or the halt, and live long enough to reach the tower.',

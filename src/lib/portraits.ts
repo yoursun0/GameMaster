@@ -69,6 +69,28 @@ export const PORTRAITS: readonly Portrait[] = [
   },
 ];
 
+/** Three faces per Ashen Thrones role, so a role cannot wear the wrong face. */
+export const ROLE_FACE_IDS: Record<string, readonly string[]> = {
+  'ash-knight': ['face-01', 'face-03', 'face-09'],
+  'ash-scholar': ['face-02', 'face-10', 'face-12'],
+  'ash-envoy': ['face-07', 'face-05', 'face-11'],
+  'ash-scout': ['face-04', 'face-06', 'face-08'],
+};
+
+export function facesForRole(characterId: string): readonly string[] {
+  return ROLE_FACE_IDS[characterId] ?? PORTRAITS.map((portrait) => portrait.id);
+}
+
+export function firstFreeFace(
+  characterId: string,
+  taken: ReadonlySet<string>,
+  current?: string,
+): string {
+  const pool = facesForRole(characterId);
+  if (current && pool.includes(current) && !taken.has(current)) return current;
+  return pool.find((id) => !taken.has(id)) ?? pool[0] ?? PORTRAITS[0].id;
+}
+
 const STORAGE_PREFIX = 'tales-beyond.faces.';
 
 export function portraitById(id: string): Portrait {
@@ -95,8 +117,9 @@ export function stepFace(
   current: string,
   direction: 1 | -1,
   taken: ReadonlySet<string>,
+  pool?: readonly string[],
 ): string {
-  const ring = PORTRAITS.map((portrait) => portrait.id).filter(
+  const ring = (pool ?? PORTRAITS.map((portrait) => portrait.id)).filter(
     (id) => id === current || !taken.has(id),
   );
   if (ring.length === 0) return current;

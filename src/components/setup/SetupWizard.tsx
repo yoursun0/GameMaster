@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
-import { dealFaces, saveFaceMap } from '@/lib/portraits';
+import { facesForRole, firstFreeFace, saveFaceMap } from '@/lib/portraits';
 import { uiString } from '@/shared/i18n';
 import type { Locale } from '@/shared/schemas';
 import { FacePicker } from './FacePicker';
@@ -50,12 +50,6 @@ export function SetupWizard() {
   const t = (key: Parameters<typeof uiString>[1]) => uiString(locale, key);
 
   useEffect(() => {
-    // Deal after mount so the server render and the first client render stay in sync.
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- random faces cannot be chosen during SSR
-    setFaces(dealFaces(4));
-  }, []);
-
-  useEffect(() => {
     void api<SessionEnvelope>('/api/session').then((data) => {
       setHasSession(Boolean(data.session));
     });
@@ -69,6 +63,24 @@ export function SetupWizard() {
   }, [locale]);
 
   const world = catalog?.worlds.find((entry) => entry.id === worldId) ?? catalog?.worlds[0];
+
+  useEffect(() => {
+    if (!world) return;
+    const ids = world.characters.map((character) => character.id);
+    // Faces are chosen after mount so the server render and the first client render stay in sync.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- a face within the role pool is picked on the client
+    setCharacters((current) => current.map((id, index) => id ?? ids[index] ?? null));
+    setFaces((current) => {
+      const next = ids.map((id, index) => {
+        const pool = facesForRole(id);
+        const existing = current?.[index];
+        if (existing && pool.includes(existing)) return existing;
+        const roll = pool[Math.floor(Math.random() * pool.length)] ?? pool[0] ?? '';
+        return roll;
+      });
+      return next;
+    });
+  }, [world]);
 
   function seatCharacter(index: number) {
     const id = characters[index];
@@ -157,11 +169,44 @@ export function SetupWizard() {
               const selectedId = characters[index] ?? world.characters[index]?.id;
               return (
                 <article key={index} className={styles.seat}>
+                  <div className={styles.roles} role="listbox" aria-label={t('ui.rolePick')}>
+                    {world.characters.map((character) => {
+                      const selected = selectedId === character.id;
+                      const blocked = characters.some((id, seat) => seat !== index && id === character.id);
+                      return (
+                        <button
+                          key={character.id}
+                          type="button"
+                          role="option"
+                          aria-selected={selected}
+                          disabled={blocked}
+                          className={selected ? styles.roleOn : styles.role}
+                          onClick={() => {
+                            const next = [...characters];
+                            next[index] = character.id;
+                            setCharacters(next);
+                            setFaces((current) => {
+                              if (!current) return current;
+                              const takenFaces = new Set(
+                                current.filter((id, seat) => seat !== index && seat < count),
+                              );
+                              const updated = [...current];
+                              updated[index] = firstFreeFace(character.id, takenFaces, updated[index]);
+                              return updated;
+                            });
+                          }}
+                        >
+                          {character.role}
+                        </button>
+                      );
+                    })}
+                  </div>
                   {faces ? (
                     <FacePicker
                       faceId={faces[index] ?? faces[0] ?? ''}
                       locale={locale}
                       taken={taken}
+                      pool={facesForRole(selectedId ?? '')}
                       label={t('ui.face')}
                       prevLabel={t('ui.facePrev')}
                       nextLabel={t('ui.faceNext')}
@@ -193,30 +238,6 @@ export function SetupWizard() {
                         setNameTouched(nextTouched);
                       }}
                     />
-                  </label>
-                  <label className={styles.field}>
-                    {t('ui.character')}
-                    <select
-                      value={characters[index] ?? ''}
-                      onChange={(event) => {
-                        const next = [...characters];
-                        next[index] = event.target.value;
-                        setCharacters(next);
-                      }}
-                    >
-                      <option value="">{t('ui.character')}</option>
-                      {world.characters.map((character) => (
-                        <option
-                          key={character.id}
-                          value={character.id}
-                          disabled={characters.some(
-                            (id, seat) => seat !== index && id === character.id,
-                          )}
-                        >
-                          {character.name} · {character.role}
-                        </option>
-                      ))}
-                    </select>
                   </label>
                   <p className={styles.bio}>
                     {world.characters.find((character) => character.id === selectedId)?.biography}

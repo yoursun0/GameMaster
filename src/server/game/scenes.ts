@@ -1,7 +1,7 @@
 import type { Requirement, WorldPack } from '@/server/content/types';
 import type { Locale } from '@/shared/schemas';
 import type { EndingKind } from '@/shared/schemas';
-import { maxResourcesFor, profileOf } from './profiles';
+import { PROFILE_STATS, maxResourcesFor, profileOf } from './profiles';
 import type { SessionState } from './schemas';
 import { REST_USED_FLAG } from './schemas';
 
@@ -27,26 +27,21 @@ export function endingKind(
   return 'failure';
 }
 
-export function anyDown(state: SessionState): boolean {
-  return state.party.some((member) => member.hp <= 0);
+export function allDown(state: SessionState): boolean {
+  return state.party.length > 0 && state.party.every((member) => member.hp <= 0);
 }
 
-export function defeatParty(state: SessionState): SessionState {
-  if (!anyDown(state)) return state;
+/** The whole party is down: set each to 1 HP and leave this place as a setback. */
+export function recoverWipe(state: SessionState, pack: WorldPack): SessionState {
   const next = structuredClone(state);
-  const names = next.party.filter((member) => member.hp <= 0).map((member) => member.displayName);
-  const zh = next.locale === 'zh-Hant';
-  next.status = 'completed';
-  next.currentPrompt = '';
-  next.suggestions = [];
-  next.ending = {
-    kind: 'failure',
-    summary: zh
-      ? `${names.join('、')}倒下了。你們輸了。`
-      : `${names.join(', ')} has fallen. You are lost.`,
-    epilogues: [],
-  };
-  return next;
+  for (const member of next.party) {
+    if (member.hp <= 0) member.hp = 1;
+  }
+  if (next.status !== 'active') return next;
+  if (next.scene.closingReason) {
+    return resolveSceneResult(next, pack, next.scene.closingReason);
+  }
+  return resolveSceneResult(next, pack, 'setback');
 }
 
 export function requirementSatisfied(
@@ -93,6 +88,35 @@ export function currentScene(pack: WorldPack, state: SessionState) {
   return scene;
 }
 
+const SEAT_JOB: Record<string, { en: string; 'zh-Hant': string }> = {
+  might: { en: 'The door and the blade are yours.', 'zh-Hant': '門和刀是你的。' },
+  agility: { en: 'The way out is yours.', 'zh-Hant': '出路是你的。' },
+  insight: { en: 'The seal and the page are yours.', 'zh-Hant': '封蠟和書頁是你的。' },
+  presence: { en: 'The voices in this room are yours.', 'zh-Hant': '這屋子裡的話是你的。' },
+};
+
+export function orderSuggestionsForSeat(
+  pack: WorldPack,
+  state: SessionState,
+  suggestions: SessionState['suggestions'],
+): SessionState['suggestions'] {
+  const actor = state.party[state.turn.activeSeat];
+  if (!actor) return suggestions;
+  const attribute = PROFILE_STATS[profileOf(pack, actor.characterId)].abilityAttribute;
+  const rank = (approachId: string | null) => (approachId?.endsWith(`-${attribute}`) ? 0 : 1);
+  return [...suggestions].sort((a, b) => rank(a.approachId) - rank(b.approachId));
+}
+
+export function seatJob(pack: WorldPack, state: SessionState): string {
+  const actor = state.party[state.turn.activeSeat];
+  if (!actor) return '';
+  const attribute = PROFILE_STATS[profileOf(pack, actor.characterId)].abilityAttribute;
+  const line = SEAT_JOB[attribute]?.[state.locale] ?? '';
+  if (!line) return actor.displayName;
+  const sep = state.locale === 'zh-Hant' ? '，' : ', ';
+  return `${actor.displayName}${sep}${line}`;
+}
+
 function localizePrompt(
   pack: WorldPack,
   state: SessionState,
@@ -101,22 +125,31 @@ function localizePrompt(
   const scene = currentScene(pack, state);
   const actor = state.party[state.turn.activeSeat];
   const profile = actor ? profileOf(pack, actor.characterId) : 'guardian';
+  const job = seatJob(pack, state);
   if (state.scene.index === 0 && state.committedActionCount === 0) {
     const opening = pack.openingByProfile[profile];
     return {
-      currentPrompt: opening.prompt[locale],
-      suggestions: opening.suggestions.map((suggestion) => ({
-        text: suggestion.text[locale],
-        approachId: suggestion.approachId,
-      })),
+      currentPrompt: `${job} ${opening.prompt[locale]}`.trim(),
+      suggestions: orderSuggestionsForSeat(
+        pack,
+        state,
+        opening.suggestions.map((suggestion) => ({
+          text: suggestion.text[locale],
+          approachId: suggestion.approachId,
+        })),
+      ),
     };
   }
   return {
-    currentPrompt: scene.prompt[locale],
-    suggestions: scene.suggestions.map((suggestion) => ({
-      text: suggestion.text[locale],
-      approachId: suggestion.approachId,
-    })),
+    currentPrompt: `${job} ${scene.prompt[locale]}`.trim(),
+    suggestions: orderSuggestionsForSeat(
+      pack,
+      state,
+      scene.suggestions.map((suggestion) => ({
+        text: suggestion.text[locale],
+        approachId: suggestion.approachId,
+      })),
+    ),
   };
 }
 

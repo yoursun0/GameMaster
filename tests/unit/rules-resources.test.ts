@@ -28,12 +28,10 @@ describe('resources, recovery and items', () => {
       1,
     );
     expect(result.state.party[0].hp).toBe(0);
-    expect(result.sceneResult).toBe('setback');
-    expect(result.state.status).toBe('completed');
-    expect(result.state.ending?.kind).toBe('failure');
-    expect(result.state.ending?.epilogues).toEqual([]);
+    expect(result.state.status).toBe('active');
+    expect(result.state.ending).toBeNull();
     expect(result.state.scene.index).toBe(0);
-    expect(result.state.ending?.summary).toBe('Player 1 has fallen. You are lost.');
+    expect(result.state.party[1].hp).toBeGreaterThan(0);
   });
 
   test('grants a unique story item only once', () => {
@@ -46,23 +44,18 @@ describe('resources, recovery and items', () => {
     expect(state.inventory.filter((item) => item.itemId === 'test-seal')).toHaveLength(1);
   });
 
-  test('a player already at 0 HP loses before a check or a restorative', () => {
+  test('a player already at 0 HP cannot take a risky check and can drink a draught', () => {
     const state = patchState(start(['guardian', 'specialist']), (draft) => {
       draft.party[0].hp = 0;
     });
-    const risky = ok(
+    expect(
       resolveAction(
         state,
         testCampaign,
         { kind: 'check', actorId: actorId(state), approachId: 's0-might' },
         () => 20,
       ),
-    );
-    expect(risky.sceneResult).toBeNull();
-    expect(risky.state.status).toBe('completed');
-    expect(risky.state.ending?.kind).toBe('failure');
-    expect(risky.state.party[0].hp).toBe(0);
-    expect(risky.state.ending?.summary).toBe('Player 1 has fallen. You are lost.');
+    ).toEqual({ ok: false, code: 'INVALID_INPUT' });
     const restored = ok(
       resolveAction(state, testCampaign, {
         kind: 'use_item',
@@ -71,26 +64,24 @@ describe('resources, recovery and items', () => {
         targetPlayerId: actorId(state),
       }),
     );
-    expect(restored.state.status).toBe('completed');
-    expect(restored.state.party[0].hp).toBe(0);
-    expect(restored.state.suggestions).toEqual([]);
+    expect(restored.state.status).toBe('active');
+    expect(restored.state.party[0].hp).toBe(4);
   });
 
-  test('one player at 0 HP ends the game as a loss', () => {
+  test('the next player can help someone at 0 HP', () => {
     const state = patchState(start(['guardian', 'specialist']), (draft) => {
       draft.party[1].hp = 0;
     });
-    const lost = ok(
+    const helped = ok(
       resolveAction(state, testCampaign, {
         kind: 'help',
         actorId: actorId(state),
         targetPlayerId: state.party[1].playerId,
       }),
     );
-    expect(lost.state.status).toBe('completed');
-    expect(lost.state.ending?.kind).toBe('failure');
-    expect(lost.state.party[1].hp).toBe(0);
-    expect(lost.state.suggestions).toEqual([]);
+    expect(helped.state.status).toBe('active');
+    expect(helped.state.ending).toBeNull();
+    expect(helped.state.party[1].hp).toBe(3);
   });
 
   test('items restore clamped amounts and reject wasted uses', () => {
@@ -160,21 +151,19 @@ describe('resources, recovery and items', () => {
     ).toEqual({ ok: false, code: 'INVALID_INPUT' });
   });
 
-  test('one player already at 0 HP is a loss with no heal and no scene advance', () => {
+  test('the whole party at 0 HP leaves as a setback at 1 HP', () => {
     const state = patchState(start(['guardian', 'specialist']), (draft) => {
       draft.party[0].hp = 1;
       draft.party[1].hp = 0;
     });
     const result = check(state, 's0-might', 1);
-    expect(result.sceneResult).toBeNull();
-    expect(result.state.status).toBe('completed');
-    expect(result.state.ending?.kind).toBe('failure');
-    expect(result.state.ending?.epilogues).toEqual([]);
-    expect(result.state.scene.index).toBe(0);
+    expect(result.sceneResult).toBe('setback');
+    expect(result.state.status).toBe('active');
+    expect(result.state.ending).toBeNull();
+    expect(result.state.scene.index).toBe(1);
     expect(result.state.party[0].hp).toBe(1);
-    expect(result.state.party[1].hp).toBe(0);
+    expect(result.state.party[1].hp).toBe(1);
     expect(result.state.party[1].mp).toBe(8);
-    expect(result.state.ending?.summary).toBe('Player 2 has fallen. You are lost.');
   });
 
   test('scene transition clears conditions and leaves living HP unchanged', () => {
@@ -194,7 +183,7 @@ describe('resources, recovery and items', () => {
     expect(result.state.status).toBe('active');
   });
 
-  test('a player at 0 HP does not transition or recover', () => {
+  test('a solo wipe on a cleared scene still leaves at 1 HP', () => {
     const state = patchState(start(['guardian']), (draft) => {
       draft.party[0].hp = 0;
       draft.party[0].conditions.push({
@@ -205,13 +194,37 @@ describe('resources, recovery and items', () => {
       draft.scene.closingReason = 'cleared';
     });
     const result = pass(state);
-    expect(result.sceneResult).toBeNull();
-    expect(result.state.status).toBe('completed');
-    expect(result.state.ending?.kind).toBe('failure');
-    expect(result.state.scene.index).toBe(0);
-    expect(result.state.party[0].hp).toBe(0);
-    expect(result.state.party[0].conditions).toEqual([
-      { id: 'exposed', appliedAtAction: 0, expires: 'scene_end' },
-    ]);
+    expect(result.sceneResult).toBe('cleared');
+    expect(result.state.status).toBe('active');
+    expect(result.state.scene.index).toBe(1);
+    expect(result.state.party[0].hp).toBe(1);
+    expect(result.state.party[0].conditions).toEqual([]);
+  });
+
+  test('cover moves one wound onto the actor and grants +2 once', () => {
+    const state = patchState(start(['guardian', 'specialist']), (draft) => {
+      draft.party[1].hp = 6;
+      draft.party[1].lastWoundHp = 2;
+    });
+    const covered = ok(
+      resolveAction(state, testCampaign, {
+        kind: 'cover',
+        actorId: actorId(state),
+        targetPlayerId: state.party[1].playerId,
+      }),
+    );
+    expect(covered.state.party[1].hp).toBe(7);
+    expect(covered.state.party[0].hp).toBe(13);
+    expect(covered.state.party[1].conditions[0]?.id).toBe('covered');
+    expect(
+      resolveAction(start(['guardian']), testCampaign, {
+        kind: 'cover',
+        actorId: 'player-0',
+        targetPlayerId: 'player-0',
+      }),
+    ).toEqual({ ok: false, code: 'INVALID_INPUT' });
+    const rolled = check(covered.state, 's0-insight', 10);
+    expect(rolled.check?.conditionModifier).toBe(2);
+    expect(rolled.state.party[1].conditions.some((condition) => condition.id === 'covered')).toBe(false);
   });
 });

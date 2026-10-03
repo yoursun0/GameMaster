@@ -11,9 +11,9 @@ export const ATTRIBUTES = ['might', 'agility', 'insight', 'presence'] as const;
 export const PROFILES = ['guardian', 'specialist', 'mediator', 'scout'] as const;
 export const DIFFICULTIES = [8, 12, 16] as const;
 export const OUTCOMES = ['success', 'partial', 'failure', 'automatic'] as const;
-export const CONDITION_IDS = ['shaken', 'exposed', 'focused'] as const;
+export const CONDITION_IDS = ['shaken', 'exposed', 'focused', 'covered'] as const;
 export const ENDING_KINDS = ['success', 'compromise', 'failure'] as const;
-export const ACTION_KINDS = ['act', 'ask', 'pass', 'help', 'use_item', 'rest'] as const;
+export const ACTION_KINDS = ['act', 'ask', 'pass', 'help', 'use_item', 'rest', 'cover'] as const;
 
 export const localeSchema = z.enum(LOCALES);
 export const worldIdSchema = z.enum(WORLD_IDS);
@@ -121,6 +121,16 @@ export const submitRestSchema = z
   })
   .strict();
 
+export const submitCoverSchema = z
+  .object({
+    operationId: uuidSchema,
+    expectedRevision: revisionSchema,
+    actorId: uuidSchema,
+    kind: z.literal('cover'),
+    targetPlayerId: uuidSchema,
+  })
+  .strict();
+
 export const submitActionSchema = z.discriminatedUnion('kind', [
   submitActSchema,
   submitAskSchema,
@@ -128,6 +138,7 @@ export const submitActionSchema = z.discriminatedUnion('kind', [
   submitHelpSchema,
   submitUseItemSchema,
   submitRestSchema,
+  submitCoverSchema,
 ]);
 
 export type SubmitAction = z.infer<typeof submitActionSchema>;

@@ -3,7 +3,7 @@ import 'server-only';
 import type { WorldPack } from '@/server/content/types';
 import type { MessageRow } from '@/server/db/repository';
 import type { SessionState } from '@/server/game/schemas';
-import { anyDown, currentScene } from '@/server/game/scenes';
+import { currentScene, seatJob } from '@/server/game/scenes';
 import { isApproachAvailable } from '@/server/game/rules';
 import { spineApproachId } from './steer';
 import type { InterpretContext, NarrateContext } from './types';
@@ -187,7 +187,8 @@ export function buildNarrateContext(args: {
     sceneTransition: transitioned
       ? { nextId: scene.id, opening: scene.opening[locale] }
       : null,
-    endingKind: anyDown(args.after) ? null : (args.after.ending?.kind ?? null),
+    endingKind: args.after.ending?.kind ?? null,
+    seatJob: seatJob(args.pack, args.after),
     worldTone: args.pack.tone[locale],
     scene: {
       id: scene.id,
@@ -258,6 +259,7 @@ export function narrateUserPayload(context: NarrateContext): string {
     newlyRevealedFacts: context.newlyRevealedFacts,
     sceneTransition: context.sceneTransition,
     endingKind: context.endingKind,
+    seatJob: context.seatJob ?? null,
     availableApproachIds: context.availableApproachIds,
     challengesOpen: (context.availableApproachIds?.length ?? 0) > 0,
     worldTone: context.worldTone,

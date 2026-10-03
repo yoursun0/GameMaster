@@ -23,11 +23,11 @@ import {
   profileOf,
 } from './profiles';
 import {
-  anyDown,
+  allDown,
   approachKey,
-  defeatParty,
   currentScene,
   markClosingIfNeeded,
+  recoverWipe,
   requirementSatisfied,
   resolveSceneResult,
   sceneThresholds,
@@ -79,6 +79,7 @@ export function conditionModifierFor(
   const modifiers: number[] = [];
   for (const condition of member.conditions) {
     if (condition.id === 'focused') modifiers.push(1);
+    if (condition.id === 'covered') modifiers.push(2);
     if (condition.id === 'shaken' && attribute === 'presence') modifiers.push(-1);
     if (condition.id === 'exposed' && attribute === 'agility') modifiers.push(-1);
   }
@@ -201,8 +202,8 @@ function afterMeaningfulAction(
   }
 
   const thresholds = sceneThresholds(next.party.length);
-  if (anyDown(next)) {
-    return defeatParty(next);
+  if (allDown(next)) {
+    return recoverWipe(next, pack);
   }
   if (next.scene.closingReason) {
     return resolveSceneResult(next, pack, next.scene.closingReason);
@@ -337,15 +338,6 @@ export function resolveAction(
   action: EngineAction,
   rollD20Fn: () => number = rollD20,
 ): EngineResult {
-  if (anyDown(state)) {
-    return {
-      ok: true,
-      state: defeatParty(state),
-      check: null,
-      consumedTurn: false,
-      sceneResult: null,
-    };
-  }
   const actorOrError = assertActiveActor(state, action.actorId);
   if (!('playerId' in actorOrError)) {
     return actorOrError;
@@ -455,6 +447,44 @@ export function resolveAction(
     };
   }
 
+  if (action.kind === 'cover') {
+    if (state.party.length < 2 || isOverwhelmed(actor)) {
+      return fail('INVALID_INPUT');
+    }
+    const target = partyMember(state, action.targetPlayerId);
+    if (!target || target.playerId === actor.playerId) {
+      return fail('INVALID_TARGET');
+    }
+    let next = structuredClone(state);
+    const ally = next.party.find((member) => member.playerId === target.playerId);
+    const self = next.party.find((member) => member.playerId === actor.playerId);
+    if (!ally || !self) {
+      return fail('INVALID_TARGET');
+    }
+    const give = Math.min(1, ally.lastWoundHp ?? 0);
+    if (give > 0) {
+      const max = maxResourcesFor(profileOf(pack, ally.characterId));
+      ally.hp = Math.min(max.hp, ally.hp + give);
+      self.hp = Math.max(1, self.hp - give);
+      ally.lastWoundHp = Math.max(0, (ally.lastWoundHp ?? 0) - give);
+      self.lastWoundHp = give;
+    }
+    ally.conditions = ally.conditions.filter((condition) => condition.id !== 'covered');
+    ally.conditions.push({
+      id: 'covered',
+      appliedAtAction: next.committedActionCount,
+      expires: 'next_check',
+    });
+    next = afterMeaningfulAction(next, pack, actor.seat, { pass: false });
+    return {
+      ok: true,
+      state: next,
+      check: null,
+      consumedTurn: true,
+      sceneResult: sceneResultOf(state, next),
+    };
+  }
+
   if (action.kind === 'rest') {
     if (!scene.restAllowed || scene.index !== 3) {
       return fail('INVALID_INPUT');
@@ -542,12 +572,14 @@ export function resolveAction(
       amount: ABILITY_COST,
     });
   }
-  if (actor.conditions.some((condition) => condition.id === 'focused')) {
-    effects.push({
-      type: 'remove_condition',
-      playerId: actor.playerId,
-      conditionId: 'focused',
-    });
+  for (const condition of actor.conditions) {
+    if (condition.expires === 'next_check') {
+      effects.push({
+        type: 'remove_condition',
+        playerId: actor.playerId,
+        conditionId: condition.id,
+      });
+    }
   }
   effects.push(
     ...riskEffects(approach.risk, check.outcome, actor.playerId, approach.npcId),
@@ -607,9 +639,9 @@ export function resolveAction(
     next.scene.closingReason = 'setback';
   }
 
-  if (anyDown(next)) {
+  if (allDown(next)) {
     next.committedActionCount += 1;
-    next = defeatParty(next);
+    next = recoverWipe(next, pack);
     return {
       ok: true,
       state: next,

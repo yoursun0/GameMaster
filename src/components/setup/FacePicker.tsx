@@ -12,6 +12,7 @@ export function FacePicker({
   label,
   prevLabel,
   nextLabel,
+  pool,
   onChange,
 }: {
   faceId: string;
@@ -20,10 +21,12 @@ export function FacePicker({
   label: string;
   prevLabel: string;
   nextLabel: string;
+  pool?: readonly string[];
   onChange: (faceId: string) => void;
 }) {
+  const faces = pool ?? PORTRAITS.map((entry) => entry.id);
   const portrait = portraitById(faceId);
-  const index = Math.max(0, PORTRAITS.findIndex((entry) => entry.id === portrait.id));
+  const index = Math.max(0, faces.indexOf(portrait.id));
 
   return (
     <div className={styles.picker} data-testid="face-picker" data-face-id={portrait.id}>
@@ -33,7 +36,7 @@ export function FacePicker({
           type="button"
           className={styles.arrow}
           aria-label={prevLabel}
-          onClick={() => onChange(stepFace(portrait.id, -1, taken))}
+          onClick={() => onChange(stepFace(portrait.id, -1, taken, faces))}
         >
           ‹
         </button>
@@ -44,7 +47,7 @@ export function FacePicker({
           type="button"
           className={styles.arrow}
           aria-label={nextLabel}
-          onClick={() => onChange(stepFace(portrait.id, 1, taken))}
+          onClick={() => onChange(stepFace(portrait.id, 1, taken, faces))}
         >
           ›
         </button>
@@ -52,11 +55,12 @@ export function FacePicker({
       <p className={styles.caption}>
         {portrait.alt[locale]}
         <span>
-          {index + 1}/{PORTRAITS.length}
+          {index + 1}/{faces.length}
         </span>
       </p>
       <div className={styles.strip} role="listbox" aria-label={label}>
-        {PORTRAITS.map((entry) => {
+        {faces.map((faceId) => {
+          const entry = portraitById(faceId);
           const selected = entry.id === portrait.id;
           const blocked = taken.has(entry.id);
           return (
